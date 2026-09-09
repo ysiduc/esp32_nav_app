@@ -11,7 +11,7 @@ extension MapLayerExtension on MapLayerType {
   String get displayName {
     switch (this) {
       case MapLayerType.darkOSM:
-        return 'Chế độ Tối (Dark OSM - Không Watermark)';
+        return 'Chế độ Tối Waze (Dark Map - Siêu Mượt)';
       case MapLayerType.osmStandard:
         return 'OSM Standard (Tiêu chuẩn OpenStreetMap)';
       case MapLayerType.osmHot:
@@ -45,6 +45,7 @@ extension MapLayerExtension on MapLayerType {
   String get urlTemplate {
     switch (this) {
       case MapLayerType.darkOSM:
+        return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
       case MapLayerType.osmStandard:
         return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
       case MapLayerType.osmHot:
@@ -61,6 +62,7 @@ extension MapLayerExtension on MapLayerType {
   List<String> get subdomains {
     switch (this) {
       case MapLayerType.darkOSM:
+        return const ['a', 'b', 'c', 'd'];
       case MapLayerType.osmStandard:
         return const [];
       case MapLayerType.osmHot:
@@ -76,6 +78,7 @@ extension MapLayerExtension on MapLayerType {
   int get maxZoom {
     switch (this) {
       case MapLayerType.darkOSM:
+        return 20;
       case MapLayerType.osmStandard:
       case MapLayerType.osmHot:
         return 19;
