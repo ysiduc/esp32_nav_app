@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import '../models/map_layer_type.dart';
 import '../models/search_place.dart';
 import '../providers/navigation_provider.dart';
 import 'ble_devices_screen.dart';
@@ -20,35 +19,8 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
-  bool _isSearchExpanded = false;
 
-  // Địa điểm phổ biến gợi ý nhanh
-  final List<SearchPlace> _popularPlaces = [
-    SearchPlace(
-      name: 'Hồ Hoàn Kiếm (Hà Nội)',
-      description: 'Phường Hàng Trống, Quận Hoàn Kiếm, Hà Nội',
-      location: const LatLng(21.0287, 105.8524),
-      type: 'tourism',
-    ),
-    SearchPlace(
-      name: 'Chợ Bến Thành (TP.HCM)',
-      description: 'Đường Lê Lợi, Phường Bến Thành, Quận 1, TP. Hồ Chí Minh',
-      location: const LatLng(10.7725, 106.6980),
-      type: 'tourism',
-    ),
-    SearchPlace(
-      name: 'Sân bay Quốc tế Nội Bài',
-      description: 'Phú Cường, Sóc Sơn, Hà Nội',
-      location: const LatLng(21.2212, 105.8072),
-      type: 'airport',
-    ),
-    SearchPlace(
-      name: 'Cầu Rồng (Đà Nẵng)',
-      description: 'Đường Nguyễn Văn Linh, Phước Ninh, Hải Châu, Đà Nẵng',
-      location: const LatLng(16.0610, 108.2272),
-      type: 'tourism',
-    ),
-  ];
+  bool _isMuted = false;
 
   @override
   void dispose() {
@@ -57,22 +29,277 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
-  void _onSelectPlace(SearchPlace place) {
+  void _openSearchModal(BuildContext context) {
     final nav = context.read<NavigationProvider>();
-    _searchFocus.unfocus();
-    setState(() {
-      _isSearchExpanded = false;
-      _searchController.text = place.name;
-    });
-    nav.selectSearchPlace(place);
-    _mapController.move(place.location, 16.0);
-  }
+    _searchController.clear();
+    nav.clearSearchResults();
 
-  void _showLayerSelectionModal(BuildContext context) {
-    final nav = context.read<NavigationProvider>();
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F172A),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final searchResults = nav.searchResults;
+            final isSearching = nav.isSearching;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Color(0xFF101725),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Grab handle
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Thanh tìm kiếm Waze Search Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF00D2FF).withAlpha(120), width: 1.2),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search_rounded, color: Color(0xFF00D2FF), size: 24),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: true,
+                            style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+                            decoration: const InputDecoration(
+                              hintText: 'Tìm điểm đến (Tên đường, chung cư, địa chỉ)...',
+                              hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
+                              border: InputBorder.none,
+                            ),
+                            onChanged: (val) {
+                              nav.searchDestination(val);
+                              setModalState(() {});
+                            },
+                          ),
+                        ),
+                        if (_searchController.text.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 20),
+                            onPressed: () {
+                              _searchController.clear();
+                              nav.clearSearchResults();
+                              setModalState(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Danh mục nhanh (Quick Category Pills)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildCategoryChip('🏠 Nhà riêng', () {
+                          _searchController.text = 'Nhà riêng';
+                          nav.searchDestination('Định Công');
+                        }),
+                        _buildCategoryChip('🏢 Cơ quan', () {
+                          _searchController.text = 'Cơ quan';
+                          nav.searchDestination('Cầu Giấy');
+                        }),
+                        _buildCategoryChip('⛽ Cây xăng', () {
+                          _searchController.text = 'Cây xăng';
+                          nav.searchDestination('Cây xăng');
+                        }),
+                        _buildCategoryChip('☕ Quán Cafe', () {
+                          _searchController.text = 'Cafe';
+                          nav.searchDestination('Cafe');
+                        }),
+                        _buildCategoryChip('🅿️ Bãi đỗ xe', () {
+                          _searchController.text = 'Bãi đỗ xe';
+                          nav.searchDestination('Bãi đỗ xe');
+                        }),
+                        _buildCategoryChip('🏥 Bệnh viện', () {
+                          _searchController.text = 'Bệnh viện';
+                          nav.searchDestination('Bệnh viện');
+                        }),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+                  const Divider(color: Colors.white10),
+
+                  // Danh sách kết quả gợi ý
+                  Expanded(
+                    child: isSearching
+                        ? const Center(
+                            child: CircularProgressIndicator(color: Color(0xFF00D2FF)),
+                          )
+                        : (searchResults.isNotEmpty)
+                            ? ListView.separated(
+                                itemCount: searchResults.length,
+                                separatorBuilder: (context, index) => const Divider(color: Colors.white10, height: 1),
+                                itemBuilder: (context, index) {
+                                  final place = searchResults[index];
+                                  return ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00D2FF).withAlpha(30),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(place.icon, color: const Color(0xFF00D2FF), size: 22),
+                                    ),
+                                    title: Text(
+                                      place.name,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    subtitle: Text(
+                                      place.description,
+                                      style: const TextStyle(color: Colors.white60, fontSize: 13),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    onTap: () {
+                                      nav.selectSearchPlace(place);
+                                      Navigator.pop(ctx);
+                                      _mapController.move(place.location, 16.5);
+                                    },
+                                  );
+                                },
+                              )
+                            : ListView(
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Text(
+                                      'ĐỊA ĐIỂM GỢI Ý PHỔ BIẾN',
+                                      style: TextStyle(color: Color(0xFF00D2FF), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                                    ),
+                                  ),
+                                  _buildLandmarkTile(
+                                    name: 'Nguyễn Cảnh Dị (Hoàng Mai)',
+                                    address: 'Phường Định Công, Quận Hoàng Mai, Hà Nội',
+                                    loc: const LatLng(20.9789, 105.8368),
+                                    icon: Icons.alt_route_rounded,
+                                    ctx: ctx,
+                                    nav: nav,
+                                  ),
+                                  _buildLandmarkTile(
+                                    name: 'Chung cư Smile Building',
+                                    address: 'Số 1 Nguyễn Cảnh Dị, Định Công, Hoàng Mai, Hà Nội',
+                                    loc: const LatLng(20.9765, 105.8392),
+                                    icon: Icons.apartment_rounded,
+                                    ctx: ctx,
+                                    nav: nav,
+                                  ),
+                                  _buildLandmarkTile(
+                                    name: 'Chung cư CT36B Định Công',
+                                    address: 'Ngõ 177 Định Công, Hoàng Mai, Hà Nội',
+                                    loc: const LatLng(20.9812, 105.8354),
+                                    icon: Icons.apartment_rounded,
+                                    ctx: ctx,
+                                    nav: nav,
+                                  ),
+                                  _buildLandmarkTile(
+                                    name: 'Hồ Hoàn Kiếm (Hồ Gươm)',
+                                    address: 'Phường Hàng Trống, Quận Hoàn Kiếm, Hà Nội',
+                                    loc: const LatLng(21.0287, 105.8524),
+                                    icon: Icons.park_rounded,
+                                    ctx: ctx,
+                                    nav: nav,
+                                  ),
+                                  _buildLandmarkTile(
+                                    name: 'Chợ Bến Thành (TP.HCM)',
+                                    address: 'Đường Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM',
+                                    loc: const LatLng(10.7725, 106.6980),
+                                    icon: Icons.storefront_rounded,
+                                    ctx: ctx,
+                                    nav: nav,
+                                  ),
+                                  _buildLandmarkTile(
+                                    name: 'Landmark 81',
+                                    address: '720A Điện Biên Phủ, Phường 22, Bình Thạnh, TP.HCM',
+                                    loc: const LatLng(10.7950, 106.7218),
+                                    icon: Icons.business_rounded,
+                                    ctx: ctx,
+                                    nav: nav,
+                                  ),
+                                ],
+                              ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryChip(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ActionChip(
+        backgroundColor: const Color(0xFF1E293B),
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        label: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _buildLandmarkTile({
+    required String name,
+    required String address,
+    required LatLng loc,
+    required IconData icon,
+    required BuildContext ctx,
+    required NavigationProvider nav,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E293B),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.cyanAccent, size: 20),
+      ),
+      title: Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+      subtitle: Text(address, style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 1),
+      onTap: () {
+        nav.selectSearchPlace(SearchPlace(name: name, description: address, location: loc));
+        Navigator.pop(ctx);
+        _mapController.move(loc, 16.5);
+      },
+    );
+  }
+
+  void _showToolsModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF101725),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -84,54 +311,26 @@ class _MapScreenState extends State<MapScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.layers_rounded, color: Color(0xFF00E5FF), size: 24),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Lớp Bản Đồ (Không Watermark)',
-                      style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white60),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
+                const Text('Công cụ & Thiết bị ESP32', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.developer_board_rounded, color: Colors.cyanAccent),
+                  title: const Text('Mô phỏng Màn hình ESP32', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Xem trước màn hình OLED/TFT', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const Esp32SimulatorScreen()));
+                  },
                 ),
-                const SizedBox(height: 12),
-                ...MapLayerType.values.map((layer) {
-                  final isSelected = nav.currentMapLayer == layer;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF00E5FF).withAlpha(30) : const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: ListTile(
-                      leading: Text(layer.iconEmoji, style: const TextStyle(fontSize: 22)),
-                      title: Text(
-                        layer.displayName,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          fontSize: 14,
-                        ),
-                      ),
-                      trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF00E5FF))
-                          : null,
-                      onTap: () {
-                        nav.setMapLayer(layer);
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                  );
-                }),
+                ListTile(
+                  leading: const Icon(Icons.notifications_active_rounded, color: Colors.amberAccent),
+                  title: const Text('Hướng dẫn Cuộc gọi / SMS (ANCS)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Cách kết nối nhận thông báo từ iOS', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const AncsGuideScreen()));
+                  },
+                ),
               ],
             ),
           ),
@@ -143,541 +342,505 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<NavigationProvider>();
-    final userPos = nav.userLocation ?? const LatLng(21.028511, 105.854444);
+    final userPos = nav.userLocation ?? const LatLng(20.9789, 105.8368);
+    final route = nav.currentRoute;
+    final step = nav.currentStep;
+
+    // Khoảng cách tới bước rẽ tiếp theo
+    final distNext = nav.distanceToNextStep;
+    final distNextStr = distNext >= 1000
+        ? '${(distNext / 1000).toStringAsFixed(1)} km'
+        : '${distNext.round()} m';
+
+    // Tên đường rẽ tiếp theo & tên đường hiện tại
+    final nextStreetName = step?.streetName.isNotEmpty == true ? step!.streetName : (nav.destinationName ?? 'Nguyễn Cảnh Dị');
+    final currentStreetName = nav.destinationName ?? 'Nguyễn Cảnh Dị';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+      backgroundColor: const Color(0xFF0C131F),
       body: Stack(
         children: [
-          // 1. OPENSTREETMAP TILE LAYER
+          // 1. WAZE DARK STYLE VECTOR-LIKE MAP
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: userPos,
-              initialZoom: 15.0,
-              maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
+              initialZoom: 16.0,
+              maxZoom: 19.0,
               onTap: (tapPosition, point) {
-                if (_searchFocus.hasFocus) {
-                  _searchFocus.unfocus();
-                }
-                setState(() {
-                  _isSearchExpanded = false;
-                });
                 if (!nav.isNavigating) {
                   nav.setDestination(point);
                 }
               },
             ),
             children: [
-              // Tile Layer với Dark Filter nếu chọn Dark OSM
-              if (nav.currentMapLayer.isDarkMode)
-                ColorFiltered(
-                  colorFilter: const ColorFilter.matrix([
-                    -0.85, 0, 0, 0, 240,
-                    0, -0.85, 0, 0, 240,
-                    0, 0, -0.85, 0, 240,
-                    0, 0, 0, 1, 0,
-                  ]),
-                  child: TileLayer(
-                    urlTemplate: nav.currentMapLayer.urlTemplate,
-                    subdomains: nav.currentMapLayer.subdomains,
-                    userAgentPackageName: 'com.esp32nav.app',
-                    maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
-                  ),
-                )
-              else
-                TileLayer(
-                  urlTemplate: nav.currentMapLayer.urlTemplate,
-                  subdomains: nav.currentMapLayer.subdomains,
+              // Lớp bản đồ tối siêu sắc nét không Watermark phong cách Waze
+              ColorFiltered(
+                colorFilter: const ColorFilter.matrix([
+                  -0.80, 0.05, 0.05, 0, 230,
+                  0.05, -0.80, 0.05, 0, 235,
+                  0.10, 0.10, -0.75, 0, 245,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.esp32nav.app',
-                  maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
+                  maxZoom: 19.0,
                 ),
+              ),
 
-              // Polyline Lộ trình
-              if (nav.currentRoute != null)
+              // Polyline Lộ trình phong cách Waze (Double Casing phát sáng Neon Cyan)
+              if (route != null) ...[
+                // Lớp viền ngoài (Glow casing)
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: nav.currentRoute!.polyline,
+                      points: route.polyline,
+                      strokeWidth: 10.0,
+                      color: const Color(0xFF0084FF).withAlpha(160),
+                    ),
+                    // Lớp phát sáng trung tâm Neon Cyan
+                    Polyline(
+                      points: route.polyline,
                       strokeWidth: 6.0,
                       color: const Color(0xFF00E5FF),
                     ),
                   ],
                 ),
+              ],
 
-              // Markers
+              // Marker Lộ trình, Vị trí xe & Biển Cảnh báo Giao thông (Waze Hazard)
               MarkerLayer(
                 markers: [
-                  // Marker Vị trí người dùng
-                  Marker(
-                    point: userPos,
-                    width: 44,
-                    height: 44,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00E5FF).withAlpha(50),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.navigation_rounded, color: Color(0xFF00E5FF), size: 28),
+                  // 1. Biển cảnh báo công trường / sự cố trên đường (Hazard Marker giống Waze)
+                  if (route != null && route.polyline.length > 5)
+                    Marker(
+                      point: route.polyline[route.polyline.length ~/ 2],
+                      width: 38,
+                      height: 38,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF5722),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withAlpha(120), blurRadius: 8, offset: const Offset(0, 3)),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.construction_rounded, color: Colors.white, size: 20),
+                        ),
                       ),
                     ),
-                  ),
-                  // Marker Điểm đến
+
+                  // 2. Điểm đến đích (Destination Marker)
                   if (nav.destination != null)
                     Marker(
                       point: nav.destination!,
-                      width: 48,
-                      height: 48,
+                      width: 44,
+                      height: 44,
                       child: const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 44),
                     ),
+
+                  // 3. MŨI TÊN DẪN ĐƯỜNG 3D PUCK (WAZE STYLE 3D NAVIGATOR ARROW)
+                  Marker(
+                    point: userPos,
+                    width: 56,
+                    height: 56,
+                    child: Center(
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Vòng tròn quầng sáng cyan
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFF00D2FF).withAlpha(40),
+                              border: Border.all(color: const Color(0xFF00D2FF).withAlpha(120), width: 1.5),
+                            ),
+                          ),
+                          // Mũi tên 3D Cyan
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00D2FF),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2.5),
+                              boxShadow: [
+                                BoxShadow(color: Colors.black.withAlpha(100), blurRadius: 8, offset: const Offset(0, 3)),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.navigation_rounded,
+                              color: Color(0xFF0B1426),
+                              size: 22,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
 
-          // 2. THANH TÌM KIẾM & CÔNG CỤ TRÊN CÙNG
+          // 2. THANH HƯỚNG RẼ TRÊN CÙNG (TOP WAZE TURN BANNER)
           SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(240),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withAlpha(140), blurRadius: 16, offset: const Offset(0, 6)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Icon Rẽ to rõ màu trắng bên trái (U-Turn / Rẽ trái / Rẽ phải)
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      step?.icon ?? Icons.u_turn_left_rounded,
+                      color: Colors.white,
+                      size: 42,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Khoảng cách rẽ to & Tên đường sắp rẽ màu Cyan
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          distNextStr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        Text(
+                          nextStreetName,
+                          style: const TextStyle(
+                            color: Color(0xFF00D2FF),
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. WIDGETS NỔI TRÊN BẢN ĐỒ (COMPASS, AUDIO, ESP32 STATUS)
+          // La bàn góc trên bên trái
+          Positioned(
+            top: 110,
+            left: 18,
+            child: GestureDetector(
+              onTap: () {
+                _mapController.rotate(0.0);
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(210),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 1.2),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withAlpha(90), blurRadius: 10, offset: const Offset(0, 3)),
+                  ],
+                ),
+                child: Center(
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      // THANH TÌM KIẾM ĐỊA ĐIỂM (SEARCH BAR)
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F172A).withAlpha(245),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: _isSearchExpanded ? const Color(0xFF00E5FF) : Colors.white24,
-                              width: 1.2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black.withAlpha(100), blurRadius: 14, offset: const Offset(0, 4)),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            focusNode: _searchFocus,
-                            style: const TextStyle(color: Colors.white, fontSize: 14),
-                            textInputAction: TextInputAction.search,
-                            decoration: InputDecoration(
-                              hintText: 'Nhập tên đường, địa chỉ hoặc tọa độ...',
-                              hintStyle: const TextStyle(color: Colors.white54, fontSize: 13),
-                              prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF00E5FF), size: 20),
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.clear_rounded, color: Colors.white54, size: 18),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        nav.clearSearchResults();
-                                      },
-                                    )
-                                  : null,
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            ),
-                            onChanged: (text) {
-                              setState(() {
-                                _isSearchExpanded = true;
-                              });
-                              nav.searchDestination(text);
-                            },
-                            onSubmitted: (text) {
-                              nav.searchDestination(text);
-                            },
-                            onTap: () {
-                              setState(() {
-                                _isSearchExpanded = true;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-
-                      // Nút Chọn Lớp Bản Đồ
-                      IconButton.filled(
-                        style: IconButton.styleFrom(backgroundColor: const Color(0xFF0F172A)),
-                        icon: Text(nav.currentMapLayer.iconEmoji, style: const TextStyle(fontSize: 18)),
-                        tooltip: 'Chọn Lớp Bản Đồ',
-                        onPressed: () => _showLayerSelectionModal(context),
-                      ),
-                      const SizedBox(width: 6),
-
-                      // Nút BLE
-                      IconButton.filled(
-                        style: IconButton.styleFrom(
-                          backgroundColor: nav.bleService.isConnected ? const Color(0xFF10B981) : const Color(0xFF0F172A),
-                        ),
-                        icon: Icon(
-                          nav.bleService.isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        tooltip: 'Quản lý Bluetooth ESP32',
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const BleDevicesScreen()),
-                          );
-                        },
-                      ),
+                      Container(width: 4, height: 22, color: Colors.white70),
+                      Positioned(top: 0, child: Container(width: 4, height: 11, color: Colors.redAccent)),
+                      const Icon(Icons.explore_rounded, color: Colors.white, size: 28),
                     ],
                   ),
                 ),
-
-                // DANH SÁCH GỢI Ý TÌM KIẾM / ĐỊA ĐIỂM PHỔ BIẾN
-                if (_isSearchExpanded)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    constraints: const BoxConstraints(maxHeight: 320),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFF00E5FF).withAlpha(120)),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withAlpha(140), blurRadius: 18, offset: const Offset(0, 8)),
-                      ],
-                    ),
-                    child: nav.isSearching
-                        ? const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircularProgressIndicator(color: Color(0xFF00E5FF), strokeWidth: 2.5),
-                                  SizedBox(height: 12),
-                                  Text('Đang tìm kiếm trên OpenStreetMap...', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                          )
-                        : (nav.searchResults.isNotEmpty)
-                            ? ListView.separated(
-                                shrinkWrap: true,
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                itemCount: nav.searchResults.length,
-                                separatorBuilder: (context, index) => const Divider(color: Colors.white10, height: 1),
-                                itemBuilder: (context, index) {
-                                  final SearchPlace place = nav.searchResults[index];
-                                  return ListTile(
-                                    leading: Icon(place.icon, color: const Color(0xFF00E5FF), size: 22),
-                                    title: Text(
-                                      place.name,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      place.description,
-                                      style: const TextStyle(color: Colors.white60, fontSize: 12),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    onTap: () => _onSelectPlace(place),
-                                  );
-                                },
-                              )
-                            : Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.fromLTRB(16, 12, 16, 6),
-                                    child: Text(
-                                      'GỢI Ý ĐỊA ĐIỂM PHỔ BIẾN',
-                                      style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1),
-                                    ),
-                                  ),
-                                  ..._popularPlaces.map(
-                                    (place) => ListTile(
-                                      leading: Icon(place.icon, color: const Color(0xFF00E5FF), size: 20),
-                                      title: Text(place.name, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                      subtitle: Text(place.description, style: const TextStyle(color: Colors.white54, fontSize: 11), maxLines: 1),
-                                      onTap: () => _onSelectPlace(place),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                  ),
-              ],
+              ),
             ),
           ),
 
-          // 3. CARD CHỈ ĐƯỜNG TRỰC TIẾP (TURN-BY-TURN HUD) KHI ĐANG DẪN ĐƯỜNG
-          if (nav.isNavigating && nav.currentStep != null)
-            Positioned(
-              top: 76,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A).withAlpha(240),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF00E5FF).withAlpha(80)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withAlpha(90), blurRadius: 16, offset: const Offset(0, 6)),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00E5FF).withAlpha(30),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        nav.currentStep!.icon,
-                        color: const Color(0xFF00E5FF),
-                        size: 36,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nav.distanceToNextStep >= 1000
-                                ? '${(nav.distanceToNextStep / 1000).toStringAsFixed(1)} km'
-                                : '${nav.distanceToNextStep.round()} m',
-                            style: const TextStyle(
-                              color: Color(0xFF00E5FF),
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            nav.currentStep!.instruction,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // 4. FLOATING BUTTONS
+          // Nút Âm thanh & Nhạc góc trên bên phải
           Positioned(
-            right: 16,
-            bottom: 200,
+            top: 110,
+            right: 18,
             child: Column(
               children: [
-                // Nút Định vị vị trí hiện tại
-                FloatingActionButton.small(
-                  heroTag: 'my_loc_btn',
-                  backgroundColor: const Color(0xFF0F172A),
-                  child: const Icon(Icons.my_location_rounded, color: Color(0xFF00E5FF)),
-                  onPressed: () {
-                    if (nav.userLocation != null) {
-                      _mapController.move(nav.userLocation!, 16.0);
-                    }
-                  },
-                ),
-                const SizedBox(height: 10),
-                // Nút Mở Giả Lập ESP32
-                FloatingActionButton.small(
-                  heroTag: 'esp32_hud_btn',
-                  backgroundColor: const Color(0xFF0F172A),
-                  child: const Icon(Icons.developer_board_rounded, color: Colors.cyanAccent),
-                  onPressed: () {
+                // Nút Nhạc / Bluetooth ESP32
+                GestureDetector(
+                  onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const Esp32SimulatorScreen()),
+                      MaterialPageRoute(builder: (_) => const BleDevicesScreen()),
                     );
                   },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: nav.bleService.isConnected ? const Color(0xFF10B981) : Colors.black.withAlpha(210),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withAlpha(90), blurRadius: 10, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 24),
+                  ),
                 ),
-                const SizedBox(height: 10),
-                // Nút Mở Hướng dẫn Cuộc gọi ANCS
-                FloatingActionButton.small(
-                  heroTag: 'ancs_btn',
-                  backgroundColor: const Color(0xFF0F172A),
-                  child: const Icon(Icons.notifications_active_rounded, color: Colors.amberAccent),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AncsGuideScreen()),
-                    );
+                const SizedBox(height: 12),
+
+                // Nút Loa / Âm thanh chỉ đường
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isMuted = !_isMuted;
+                    });
                   },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(210),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withAlpha(90), blurRadius: 10, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: Icon(
+                      _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
 
-          // 5. HUD TỐC ĐỘ (SPEED GAUGE)
-          if (nav.isNavigating)
-            Positioned(
-              bottom: 190,
-              left: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A).withAlpha(220),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white24),
+          // 4. ĐỒNG HỒ TỐC ĐỘ (SPEEDOMETER) GÓC DƯỚI BÊN TRÁI
+          Positioned(
+            bottom: 125,
+            left: 18,
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(220),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white24, width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withAlpha(120), blurRadius: 12, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${nav.currentSpeedKmh.round()}',
+                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, height: 1.0),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'km/h',
+                    style: TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 5. CAPSULE TÊN ĐƯỜNG HIỆN TẠI (STREET NAME PILL) Ở GIỮA
+          Positioned(
+            bottom: 135,
+            left: 95,
+            right: 95,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(235),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white24, width: 1.2),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withAlpha(100), blurRadius: 12, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Text(
+                currentStreetName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
-                child: Column(
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+
+          // 6. NÚT CẢNH BÁO / BÁO CÁO SỰ CỐ (WAZE HAZARD REPORT BUTTON) GÓC DƯỚI PHẢI
+          Positioned(
+            bottom: 125,
+            right: 18,
+            child: GestureDetector(
+              onTap: () {
+                _showToolsModal(context);
+              },
+              child: Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEAB308), Color(0xFFCA8A04)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFFEAB308).withAlpha(90), blurRadius: 14, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      '${nav.currentSpeedKmh.round()}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Colors.black,
+                        shape: BoxShape.circle,
                       ),
                     ),
-                    const Text(
-                      'km/h',
-                      style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFEAB308), size: 36),
+                    const Positioned(
+                      child: Icon(Icons.add, color: Colors.black, size: 16),
                     ),
                   ],
                 ),
               ),
             ),
+          ),
 
-          // 6. THANH ĐIỀU KHIỂN DƯỚI CÙNG (BOTTOM NAVIGATION SHEET)
+          // 7. THANH ĐIỀU HƯỚNG BOTTOM (WAZE ARRIVAL & ROUTE BAR)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+              decoration: const BoxDecoration(
+                color: Color(0xFF12161E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withAlpha(120), blurRadius: 20, offset: const Offset(0, -4)),
+                  BoxShadow(color: Colors.black, blurRadius: 20, offset: Offset(0, -6)),
                 ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (nav.isLoadingRoute)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: CircularProgressIndicator(color: Color(0xFF00E5FF)),
-                    )
-                  else if (nav.currentRoute != null) ...[
-                    // Tên điểm đến đã chọn
-                    if (nav.destinationName != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 18),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                nav.destinationName!,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                  // Grab Handle
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Nút Tìm kiếm 🔍
+                      GestureDetector(
+                        onTap: () => _openSearchModal(context),
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF1E2634),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.search_rounded, color: Colors.white, size: 26),
                         ),
                       ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Tổng quãng đường', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                            Text(
-                              nav.currentRoute!.formattedTotalDistance,
-                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            const Text('Thời gian dự kiến', style: TextStyle(color: Colors.white60, fontSize: 12)),
-                            Text(
-                              nav.currentRoute!.formattedDuration,
-                              style: const TextStyle(color: Color(0xFF00E5FF), fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        // Nút Gửi Bản Đồ Sang ESP32
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF00E5FF),
-                              side: const BorderSide(color: Color(0xFF00E5FF)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            icon: const Icon(Icons.send_rounded),
-                            label: const Text('Gửi Bản Đồ ESP32', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: () {
-                              nav.sendMapVectorToEsp32();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Đã gửi bản đồ lộ trình vector sang ESP32!')),
-                              );
-                            },
+
+                      // Thông tin ETA to đậm ở giữa (21:25 | 1:11 h • 41 km)
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => _openSearchModal(context),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                route != null ? route.arrivalTimeFormatted : '21:25',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                route != null ? route.durationAndDistanceFormatted : '1:11 h  •  41 km',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        // Nút Bắt đầu / Dừng dẫn đường
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: nav.isNavigating ? Colors.redAccent : const Color(0xFF00E5FF),
-                              foregroundColor: nav.isNavigating ? Colors.white : Colors.black,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            icon: Icon(nav.isNavigating ? Icons.stop_rounded : Icons.navigation_rounded),
-                            label: Text(
-                              nav.isNavigating ? 'Dừng Lộ Trình' : 'Bắt Đầu',
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                            ),
-                            onPressed: () {
-                              if (nav.isNavigating) {
-                                nav.stopNavigation();
-                              } else {
-                                nav.startNavigation();
-                              }
-                            },
+                      ),
+
+                      // Nút Lộ trình phụ / Đổi hướng (🔀)
+                      GestureDetector(
+                        onTap: () {
+                          // Gửi lộ trình sang ESP32 và đồng bộ
+                          nav.sendMapVectorToEsp32();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Đã đồng bộ lộ trình Waze sang ESP32!')),
+                          );
+                        },
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0084FF),
+                            shape: BoxShape.circle,
                           ),
+                          child: const Icon(Icons.alt_route_rounded, color: Colors.white, size: 26),
                         ),
-                      ],
-                    ),
-                  ] else ...[
-                    const Row(
-                      children: [
-                        Icon(Icons.touch_app_rounded, color: Color(0xFF00E5FF), size: 28),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Tìm kiếm nơi đến ở thanh trên hoặc chạm vào bản đồ để tạo lộ trình chỉ đường OSRM',
-                            style: TextStyle(color: Colors.white70, fontSize: 13),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
