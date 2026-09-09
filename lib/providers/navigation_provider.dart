@@ -4,14 +4,18 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/nav_step.dart';
 import '../models/route_data.dart';
+import '../models/search_place.dart';
+import '../models/map_layer_type.dart';
 import '../services/ble_service.dart';
 import '../services/location_service.dart';
 import '../services/osrm_service.dart';
+import '../services/geocoding_service.dart';
 
 class NavigationProvider extends ChangeNotifier {
   final LocationService _locationService = LocationService();
   final OsrmService _osrmService = OsrmService();
   final BleService _bleService = BleService();
+  final GeocodingService _geocodingService = GeocodingService();
 
   BleService get bleService => _bleService;
 
@@ -20,6 +24,9 @@ class NavigationProvider extends ChangeNotifier {
 
   LatLng? _destination;
   LatLng? get destination => _destination;
+
+  String? _destinationName;
+  String? get destinationName => _destinationName;
 
   RouteData? _currentRoute;
   RouteData? get currentRoute => _currentRoute;
@@ -50,8 +57,20 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastSentPayload;
   String? get lastSentPayload => _lastSentPayload;
 
+  // Lớp bản đồ hiện tại (mặc định Dark Matter)
+  MapLayerType _currentMapLayer = MapLayerType.cartoDark;
+  MapLayerType get currentMapLayer => _currentMapLayer;
+
+  // Quản lý tìm kiếm
+  List<SearchPlace> _searchResults = [];
+  List<SearchPlace> get searchResults => _searchResults;
+
+  bool _isSearching = false;
+  bool get isSearching => _isSearching;
+
   StreamSubscription<Position>? _positionSubscription;
   Timer? _bleSyncTimer;
+  Timer? _debounceTimer;
 
   NavigationProvider() {
     _init();
@@ -70,9 +89,53 @@ class NavigationProvider extends ChangeNotifier {
     });
   }
 
-  /// Cập nhật điểm đến và tính toán lộ trình
-  Future<void> setDestination(LatLng dest) async {
+  /// Đổi Lớp Bản đồ (OSM Standard, Satellite, Dark, Topo...)
+  void setMapLayer(MapLayerType layer) {
+    _currentMapLayer = layer;
+    notifyListeners();
+  }
+
+  /// Tìm kiếm địa điểm với Debounce
+  void searchDestination(String query) {
+    _debounceTimer?.cancel();
+    if (query.trim().isEmpty) {
+      _searchResults = [];
+      _isSearching = false;
+      notifyListeners();
+      return;
+    }
+
+    _isSearching = true;
+    notifyListeners();
+
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
+      final results = await _geocodingService.searchPlaces(query, userLocation: _userLocation);
+      _searchResults = results;
+      _isSearching = false;
+      notifyListeners();
+    });
+  }
+
+  void clearSearchResults() {
+    _searchResults = [];
+    _isSearching = false;
+    notifyListeners();
+  }
+
+  /// Chọn địa điểm từ kết quả tìm kiếm
+  Future<void> selectSearchPlace(SearchPlace place) async {
+    _destination = place.location;
+    _destinationName = place.name;
+    _searchResults = [];
+    _isSearching = false;
+    notifyListeners();
+    await calculateRoute();
+  }
+
+  /// Cập nhật điểm đến khi chạm trực tiếp trên bản đồ
+  Future<void> setDestination(LatLng dest, {String? name}) async {
     _destination = dest;
+    _destinationName = name ?? 'Điểm đã chọn trên bản đồ';
     notifyListeners();
     await calculateRoute();
   }
@@ -81,7 +144,6 @@ class NavigationProvider extends ChangeNotifier {
   Future<void> calculateRoute() async {
     if (_userLocation == null && _destination == null) return;
 
-    // Nếu chưa có vị trí GPS thực, lấy vị trí mặc định (Hà Nội / TP.HCM)
     final start = _userLocation ?? const LatLng(21.028511, 105.854444);
     final end = _destination ?? const LatLng(21.0368, 105.8346);
 
@@ -176,6 +238,7 @@ class NavigationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _positionSubscription?.cancel();
     _bleSyncTimer?.cancel();
     super.dispose();
