@@ -140,6 +140,7 @@ class _MapScreenState extends State<MapScreen> {
                                       style: TextStyle(color: Color(0xFF00D2FF), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
                                     ),
                                   ),
+                                  _buildPlaceTile('Phố Trần Nguyên Hãn', 'Phường Lý Thái Tổ, Quận Hoàn Kiếm, Hà Nội', const LatLng(21.0268, 105.8540), ctx, nav),
                                   _buildPlaceTile('Phương Hạnh', 'Quốc Oai, Hà Nội', const LatLng(20.9125, 105.6548), ctx, nav),
                                   _buildPlaceTile('Nguyễn Cảnh Dị (Định Công)', 'Phố Nguyễn Cảnh Dị, Hoàng Mai, Hà Nội', const LatLng(20.9789, 105.8368), ctx, nav),
                                   _buildPlaceTile('Chung cư Smile Building', 'Số 1 Nguyễn Cảnh Dị, Hoàng Mai, Hà Nội', const LatLng(20.9765, 105.8392), ctx, nav),
@@ -184,10 +185,10 @@ class _MapScreenState extends State<MapScreen> {
     final step = nav.currentStep;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0C131F),
+      backgroundColor: const Color(0xFF0F172A),
       body: Stack(
         children: [
-          // 1. BẢN ĐỒ TỐI ĐA ĐIỂM WAZE (SIÊU MƯỢT, 60FPS, TẢI TILE NHANH)
+          // 1. BẢN ĐỒ TỐI ĐA LUỒNG CDN (KHÔNG BAO GIỜ BỊ Ô VUÔNG TRẮNG, TẢI CỰC NHANH)
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -196,6 +197,7 @@ class _MapScreenState extends State<MapScreen> {
               maxZoom: 19.0,
               minZoom: 3.0,
               keepAlive: true,
+              backgroundColor: const Color(0xFF0F172A),
               onTap: (tapPosition, point) {
                 if (nav.uiMode != AppUiMode.activeNavigation) {
                   nav.setDestination(point);
@@ -203,19 +205,26 @@ class _MapScreenState extends State<MapScreen> {
               },
             ),
             children: [
-              // Tile Layer tải từ CDN đa luồng với bộ đệm cao keepBuffer: 6
+              // Sử dụng CDN đa luồng (a, b, c) của OSM Humanitarian với bộ đệm cao
               ColorFiltered(
                 colorFilter: const ColorFilter.matrix([
-                  -0.80, 0.05, 0.05, 0, 230,
-                  0.05, -0.80, 0.05, 0, 235,
-                  0.10, 0.10, -0.75, 0, 245,
-                  0, 0, 0, 1, 0,
+                  -0.70, 0.00, 0.00, 0, 205,
+                   0.00, -0.65, 0.00, 0, 215,
+                   0.05, 0.05, -0.55, 0, 240,
+                   0,    0,    0,    1, 0,
                 ]),
                 child: TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c'],
                   userAgentPackageName: 'com.esp32nav.app',
                   keepBuffer: 6,
+                  panBuffer: 2,
                   maxZoom: 19.0,
+                  tileProvider: NetworkTileProvider(
+                    headers: const {
+                      'User-Agent': 'ESP32NavApp/2.0 (iOS; Navigation)',
+                    },
+                  ),
                 ),
               ),
 
@@ -313,7 +322,6 @@ class _MapScreenState extends State<MapScreen> {
 
                   // 4. HUY HIỆU THỜI GIAN TRÊN CÁC TUYẾN ĐƯỜNG (Ảnh 1)
                   if (nav.uiMode != AppUiMode.activeNavigation && routes.isNotEmpty) ...[
-                    // Huy hiệu tuyến chính (Xanh Cyan "1h 11p Tốt nhất")
                     if (currentRoute != null && currentRoute.polyline.length > 15)
                       Marker(
                         point: currentRoute.polyline[currentRoute.polyline.length ~/ 3],
@@ -347,7 +355,6 @@ class _MapScreenState extends State<MapScreen> {
                         ),
                       ),
 
-                    // Huy hiệu tuyến phụ (Màu Đen "1h 14p", "1h 16p")
                     for (int i = 0; i < routes.length; i++)
                       if (i != nav.selectedRouteIndex && routes[i].polyline.length > 15)
                         Marker(
@@ -407,7 +414,6 @@ class _MapScreenState extends State<MapScreen> {
           // 2. GIAO DIỆN CHẾ ĐỘ 1: XEM TRƯỚC LỘ TRÌNH (ẢNH 1)
           // ==========================================
           if (nav.uiMode == AppUiMode.previewMap) ...[
-            // Hộp 2 Điểm Đi - Đến trên cùng
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -416,15 +422,12 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     Row(
                       children: [
-                        // Nút Back
                         IconButton(
                           style: IconButton.styleFrom(backgroundColor: const Color(0xFF1E2634)),
                           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
                           onPressed: () => _openSearchModal(context),
                         ),
                         const SizedBox(width: 8),
-
-                        // Hộp Địa chỉ Đi & Đến
                         Expanded(
                           child: GestureDetector(
                             onTap: () => _openSearchModal(context),
@@ -474,8 +477,6 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-
-                    // Nút Lọc "Tránh ⌵"
                     GestureDetector(
                       onTap: () {},
                       child: Container(
@@ -500,7 +501,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Bottom Card Thời gian, Lộ trình & Nút Bắt đầu
             Positioned(
               bottom: 0,
               left: 0,
@@ -518,7 +518,6 @@ class _MapScreenState extends State<MapScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Grab Handle (Chạm vào chuyển sang Tab Danh Sách Tuyến Đường - Ảnh 3)
                     Center(
                       child: GestureDetector(
                         onTap: () => nav.setUiMode(AppUiMode.previewList),
@@ -530,8 +529,6 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // Thời gian to & Quãng đường
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -546,8 +543,6 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-
-                    // Tên lộ trình chính & Trạng thái giao thông
                     Text(
                       currentRoute?.viaRoadName ?? 'Qua CT. Đại lộ Thăng Long Hà Nội',
                       style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
@@ -557,8 +552,6 @@ class _MapScreenState extends State<MapScreen> {
                       style: TextStyle(color: Colors.white54, fontSize: 13),
                     ),
                     const SizedBox(height: 8),
-
-                    // Badge Cảnh báo nguy hiểm / thông thoáng
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -575,8 +568,6 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // 2 Nút "Lên lịch trình" & "Bắt đầu"
                     Row(
                       children: [
                         Expanded(
@@ -616,7 +607,6 @@ class _MapScreenState extends State<MapScreen> {
           // 3. GIAO DIỆN CHẾ ĐỘ 2: DANH SÁCH CÁC TUYẾN ĐƯỜNG (ẢNH 3)
           // ==========================================
           if (nav.uiMode == AppUiMode.previewList) ...[
-            // Top Turn Banner
             SafeArea(
               child: Container(
                 margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -644,7 +634,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Tab Selector "B.đồ" / "D.sách"
             Positioned(
               top: 110,
               left: 0,
@@ -680,7 +669,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Danh sách các thẻ Tuyến đường
             Positioned(
               top: 170,
               left: 16,
@@ -712,7 +700,6 @@ class _MapScreenState extends State<MapScreen> {
           // 4. GIAO DIỆN CHẾ ĐỘ 3: DẪN ĐƯỜNG TRỰC TIẾP (ẢNH 2)
           // ==========================================
           if (nav.uiMode == AppUiMode.activeNavigation) ...[
-            // Top Waze Turn Banner
             SafeArea(
               child: Container(
                 margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -751,7 +738,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // La bàn (Compass) góc trên bên trái
             Positioned(
               top: 110,
               left: 18,
@@ -779,7 +765,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Nút Nhạc & Loa góc trên bên phải
             Positioned(
               top: 110,
               right: 18,
@@ -818,7 +803,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Đồng hồ Tốc độ (Speedometer) góc dưới bên trái
             Positioned(
               bottom: 125,
               left: 18,
@@ -840,7 +824,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Capsule Tên đường hiện tại ở giữa
             Positioned(
               bottom: 135,
               left: 95,
@@ -862,7 +845,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Nút Báo cáo sự cố Waze (Nút vàng) góc dưới phải
             Positioned(
               bottom: 125,
               right: 18,
@@ -889,7 +871,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Thanh Bottom Waze Arrival Bar
             Positioned(
               bottom: 0,
               left: 0,
@@ -988,7 +969,6 @@ class _MapScreenState extends State<MapScreen> {
           const SizedBox(height: 4),
           Text(roadName, style: const TextStyle(color: Colors.white54, fontSize: 13)),
           const SizedBox(height: 10),
-          // Thanh tiến trình với icon công trình
           Stack(
             alignment: Alignment.centerLeft,
             children: [
