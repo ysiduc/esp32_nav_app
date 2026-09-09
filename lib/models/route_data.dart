@@ -17,6 +17,8 @@ class RouteData {
   final double totalDurationSeconds;
   final LatLng startLocation;
   final LatLng destinationLocation;
+  final String viaRoadName;
+  final int routeIndex;
 
   RouteData({
     required this.polyline,
@@ -25,6 +27,8 @@ class RouteData {
     required this.totalDurationSeconds,
     required this.startLocation,
     required this.destinationLocation,
+    this.viaRoadName = 'Qua CT. Đại lộ Thăng Long Hà Nội',
+    this.routeIndex = 0,
   });
 
   /// Giờ đến nơi dự kiến (ETA) dạng 21:25
@@ -33,7 +37,37 @@ class RouteData {
     return DateFormat('HH:mm').format(eta);
   }
 
-  /// Thông tin tóm tắt dạng "1:11 h • 41 km" hoặc "14 phút • 3.2 km"
+  /// Thời gian hiển thị ngắn dạng "1h 11p" hoặc "14p"
+  String get shortDurationFormatted {
+    final totalMinutes = (totalDurationSeconds / 60).round();
+    if (totalMinutes >= 60) {
+      final hours = totalMinutes ~/ 60;
+      final mins = totalMinutes % 60;
+      return '${hours}h ${mins}p';
+    }
+    return '${totalMinutes}p';
+  }
+
+  /// Thời gian hiển thị đầy đủ dạng "1 giờ 11 phút" hoặc "14 phút"
+  String get fullDurationFormatted {
+    final totalMinutes = (totalDurationSeconds / 60).round();
+    if (totalMinutes >= 60) {
+      final hours = totalMinutes ~/ 60;
+      final mins = totalMinutes % 60;
+      return '$hours giờ $mins phút';
+    }
+    return '$totalMinutes phút';
+  }
+
+  /// Khoảng cách chuẩn hóa dạng "41,4 km" hoặc "350 m"
+  String get formattedTotalDistance {
+    if (totalDistanceMeters >= 1000) {
+      return '${(totalDistanceMeters / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+    }
+    return '${totalDistanceMeters.round()} m';
+  }
+
+  /// Thông tin tóm tắt dạng "1:11 h • 41 km"
   String get durationAndDistanceFormatted {
     final totalMinutes = (totalDurationSeconds / 60).round();
     String durStr;
@@ -47,29 +81,12 @@ class RouteData {
 
     String distStr;
     if (totalDistanceMeters >= 1000) {
-      distStr = '${(totalDistanceMeters / 1000).toStringAsFixed(1)} km';
+      distStr = '${(totalDistanceMeters / 1000).toStringAsFixed(0)} km';
     } else {
       distStr = '${totalDistanceMeters.round()} m';
     }
 
     return '$durStr  •  $distStr';
-  }
-
-  String get formattedTotalDistance {
-    if (totalDistanceMeters >= 1000) {
-      return '${(totalDistanceMeters / 1000).toStringAsFixed(1)} km';
-    }
-    return '${totalDistanceMeters.round()} m';
-  }
-
-  String get formattedDuration {
-    final minutes = (totalDurationSeconds / 60).round();
-    if (minutes >= 60) {
-      final hours = minutes ~/ 60;
-      final remainingMinutes = minutes % 60;
-      return '${hours}h ${remainingMinutes}m';
-    }
-    return '$minutes phút';
   }
 
   /// Nén và chuẩn hóa Polyline thành danh sách điểm (x, y) kích thước width x height cho ESP32

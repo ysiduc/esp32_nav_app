@@ -11,6 +11,12 @@ import '../services/location_service.dart';
 import '../services/osrm_service.dart';
 import '../services/geocoding_service.dart';
 
+enum AppUiMode {
+  previewMap,      // Màn hình chọn & xem trước lộ trình (Ảnh 1)
+  previewList,     // Tab danh sách các tuyến đường so sánh (Ảnh 3)
+  activeNavigation // Dẫn đường thời gian thực (Ảnh 2)
+}
+
 class NavigationProvider extends ChangeNotifier {
   final LocationService _locationService = LocationService();
   final OsrmService _osrmService = OsrmService();
@@ -25,24 +31,37 @@ class NavigationProvider extends ChangeNotifier {
   LatLng? _destination;
   LatLng? get destination => _destination;
 
-  String? _destinationName;
-  String? get destinationName => _destinationName;
+  final String _startAddressName = 'Vị trí của bạn';
+  String get startAddressName => _startAddressName;
 
-  RouteData? _currentRoute;
-  RouteData? get currentRoute => _currentRoute;
+  String _destinationName = 'Phương Hạnh';
+  String get destinationName => _destinationName;
+
+  List<RouteData> _routes = [];
+  List<RouteData> get routes => _routes;
+
+  int _selectedRouteIndex = 0;
+  int get selectedRouteIndex => _selectedRouteIndex;
+
+  RouteData? get currentRoute => _routes.isNotEmpty && _selectedRouteIndex < _routes.length
+      ? _routes[_selectedRouteIndex]
+      : null;
+
+  AppUiMode _uiMode = AppUiMode.previewMap;
+  AppUiMode get uiMode => _uiMode;
 
   int _currentStepIndex = 0;
   int get currentStepIndex => _currentStepIndex;
 
   NavStep? get currentStep {
-    if (_currentRoute == null || _currentRoute!.steps.isEmpty) return null;
-    if (_currentStepIndex < _currentRoute!.steps.length) {
-      return _currentRoute!.steps[_currentStepIndex];
+    if (currentRoute == null || currentRoute!.steps.isEmpty) return null;
+    if (_currentStepIndex < currentRoute!.steps.length) {
+      return currentRoute!.steps[_currentStepIndex];
     }
-    return _currentRoute!.steps.last;
+    return currentRoute!.steps.last;
   }
 
-  double _distanceToNextStep = 0.0;
+  double _distanceToNextStep = 10.0;
   double get distanceToNextStep => _distanceToNextStep;
 
   double _currentSpeedKmh = 0.0;
@@ -57,11 +76,9 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastSentPayload;
   String? get lastSentPayload => _lastSentPayload;
 
-  // Lớp bản đồ hiện tại (mặc định Dark OSM - 0 Watermark)
   MapLayerType _currentMapLayer = MapLayerType.darkOSM;
   MapLayerType get currentMapLayer => _currentMapLayer;
 
-  // Quản lý tìm kiếm
   List<SearchPlace> _searchResults = [];
   List<SearchPlace> get searchResults => _searchResults;
 
@@ -80,8 +97,13 @@ class NavigationProvider extends ChangeNotifier {
     final loc = await _locationService.getCurrentLocation();
     if (loc != null) {
       _userLocation = loc;
-      notifyListeners();
+    } else {
+      _userLocation = const LatLng(20.9789, 105.8368); // Nguyễn Cảnh Dị mặc định
     }
+    _destination = const LatLng(20.9125, 105.6548); // Điểm đến Phương Hạnh
+    notifyListeners();
+
+    await calculateRoute();
 
     _bleService.lastPayloadStream.listen((payload) {
       _lastSentPayload = payload;
@@ -89,13 +111,28 @@ class NavigationProvider extends ChangeNotifier {
     });
   }
 
-  /// Đổi Lớp Bản đồ (Dark OSM, Standard, HOT, Esri Street, Satellite...)
+  void setUiMode(AppUiMode mode) {
+    _uiMode = mode;
+    notifyListeners();
+  }
+
+  void selectRoute(int index) {
+    if (index >= 0 && index < _routes.length) {
+      _selectedRouteIndex = index;
+      _currentStepIndex = 0;
+      notifyListeners();
+      if (_bleService.isConnected && currentRoute != null) {
+        final points = currentRoute!.generateNormalizedPolyline();
+        _bleService.sendVectorMap(points);
+      }
+    }
+  }
+
   void setMapLayer(MapLayerType layer) {
     _currentMapLayer = layer;
     notifyListeners();
   }
 
-  /// Tìm kiếm địa điểm với Debounce
   void searchDestination(String query) {
     _debounceTimer?.cancel();
     if (query.trim().isEmpty) {
@@ -122,56 +159,56 @@ class NavigationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Chọn địa điểm từ kết quả tìm kiếm
   Future<void> selectSearchPlace(SearchPlace place) async {
     _destination = place.location;
     _destinationName = place.name;
     _searchResults = [];
     _isSearching = false;
+    _uiMode = AppUiMode.previewMap;
     notifyListeners();
     await calculateRoute();
   }
 
-  /// Cập nhật điểm đến khi chạm trực tiếp trên bản đồ
   Future<void> setDestination(LatLng dest, {String? name}) async {
     _destination = dest;
     _destinationName = name ?? 'Điểm đã chọn trên bản đồ';
+    _uiMode = AppUiMode.previewMap;
     notifyListeners();
     await calculateRoute();
   }
 
-  /// Tính toán lộ trình từ vị trí hiện tại đến điểm đến
   Future<void> calculateRoute() async {
     if (_userLocation == null && _destination == null) return;
 
-    final start = _userLocation ?? const LatLng(21.028511, 105.854444);
-    final end = _destination ?? const LatLng(21.0368, 105.8346);
+    final start = _userLocation ?? const LatLng(20.9789, 105.8368);
+    final end = _destination ?? const LatLng(20.9125, 105.6548);
 
     _isLoadingRoute = true;
     notifyListeners();
 
-    final route = await _osrmService.getRoute(start: start, destination: end);
-    _currentRoute = route;
+    final fetchedRoutes = await _osrmService.getRoutes(start: start, destination: end);
+    if (fetchedRoutes.isNotEmpty) {
+      _routes = fetchedRoutes;
+      _selectedRouteIndex = 0;
+    }
     _currentStepIndex = 0;
     _isLoadingRoute = false;
     notifyListeners();
 
-    // Nếu đã kết nối ESP32, tự động gửi bản đồ vector Polyline sang ESP32
-    if (_bleService.isConnected && _currentRoute != null) {
-      final points = _currentRoute!.generateNormalizedPolyline();
+    if (_bleService.isConnected && currentRoute != null) {
+      final points = currentRoute!.generateNormalizedPolyline();
       await _bleService.sendVectorMap(points);
     }
   }
 
-  /// Bắt đầu chế độ dẫn đường Turn-by-Turn
   void startNavigation() {
-    if (_currentRoute == null || _currentRoute!.steps.isEmpty) return;
+    if (currentRoute == null || currentRoute!.steps.isEmpty) return;
 
     _isNavigating = true;
+    _uiMode = AppUiMode.activeNavigation;
     _currentStepIndex = 0;
     notifyListeners();
 
-    // Lắng nghe GPS thời gian thực
     _positionSubscription?.cancel();
     _positionSubscription = _locationService.getPositionStream().listen((pos) {
       _userLocation = LatLng(pos.latitude, pos.longitude);
@@ -181,41 +218,37 @@ class NavigationProvider extends ChangeNotifier {
       notifyListeners();
     });
 
-    // Định kỳ 1 giây gửi gói tin chỉ đường sang ESP32
     _bleSyncTimer?.cancel();
     _bleSyncTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _syncNavToEsp32();
     });
   }
 
-  /// Hủy dẫn đường
   void stopNavigation() {
     _isNavigating = false;
+    _uiMode = AppUiMode.previewMap;
     _positionSubscription?.cancel();
     _bleSyncTimer?.cancel();
     notifyListeners();
   }
 
-  /// Cập nhật bước rẽ tiếp theo dựa trên khoảng cách GPS
   void _updateNavigationStep() {
-    if (_currentRoute == null || _userLocation == null) return;
-    if (_currentStepIndex >= _currentRoute!.steps.length) return;
+    if (currentRoute == null || _userLocation == null) return;
+    if (_currentStepIndex >= currentRoute!.steps.length) return;
 
-    final targetStep = _currentRoute!.steps[_currentStepIndex];
+    final targetStep = currentRoute!.steps[_currentStepIndex];
     final dist = LocationService.calculateDistance(_userLocation!, targetStep.location);
     _distanceToNextStep = dist;
 
-    // Nếu người dùng đã đến gần khúc rẽ (< 15 mét), tự động chuyển sang bước rẽ tiếp theo
-    if (dist < 15 && _currentStepIndex < _currentRoute!.steps.length - 1) {
+    if (dist < 15 && _currentStepIndex < currentRoute!.steps.length - 1) {
       _currentStepIndex++;
       _distanceToNextStep = LocationService.calculateDistance(
         _userLocation!,
-        _currentRoute!.steps[_currentStepIndex].location,
+        currentRoute!.steps[_currentStepIndex].location,
       );
     }
   }
 
-  /// Đồng bộ gói tin sang ESP32 qua BLE
   void _syncNavToEsp32() {
     if (!_bleService.isConnected || !_isNavigating || currentStep == null) return;
 
@@ -224,15 +257,14 @@ class NavigationProvider extends ChangeNotifier {
       distMeters: _distanceToNextStep,
       streetName: currentStep!.streetName,
       speedKmh: _currentSpeedKmh,
-      remainDistanceMeters: _currentRoute?.totalDistanceMeters ?? 0,
-      remainDurationSeconds: _currentRoute?.totalDurationSeconds ?? 0,
+      remainDistanceMeters: currentRoute?.totalDistanceMeters ?? 0,
+      remainDurationSeconds: currentRoute?.totalDurationSeconds ?? 0,
     );
   }
 
-  /// Gửi thủ công bản đồ vector sang ESP32
   Future<void> sendMapVectorToEsp32() async {
-    if (_currentRoute == null) return;
-    final points = _currentRoute!.generateNormalizedPolyline();
+    if (currentRoute == null) return;
+    final points = currentRoute!.generateNormalizedPolyline();
     await _bleService.sendVectorMap(points);
   }
 
