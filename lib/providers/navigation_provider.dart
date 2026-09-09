@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:vector_map_tiles/vector_map_tiles.dart';
 import '../models/nav_step.dart';
 import '../models/route_data.dart';
 import '../models/search_place.dart';
@@ -98,8 +99,14 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastSentPayload;
   String? get lastSentPayload => _lastSentPayload;
 
-  MapLayerType _currentMapLayer = MapLayerType.voyager;
+  MapLayerType _currentMapLayer = MapLayerType.openFreeMapLiberty;
   MapLayerType get currentMapLayer => _currentMapLayer;
+
+  Style? _mapStyle;
+  Style? get mapStyle => _mapStyle;
+
+  bool _isLoadingStyle = false;
+  bool get isLoadingStyle => _isLoadingStyle;
 
   List<SearchPlace> _searchResults = [];
   List<SearchPlace> get searchResults => _searchResults;
@@ -116,11 +123,12 @@ class NavigationProvider extends ChangeNotifier {
   }
 
   Future<void> _init() async {
+    _loadOpenFreeMapStyle();
+
     final loc = await _locationService.getCurrentLocation();
     if (loc != null) {
       _userLocation = loc;
     } else {
-      // Vị trí mặc định trên đường Lê Văn Sỹ như trong ảnh mẫu
       _userLocation = const LatLng(10.7915, 106.6668);
     }
     _destination = const LatLng(10.8035, 106.6640);
@@ -133,6 +141,23 @@ class NavigationProvider extends ChangeNotifier {
       _lastSentPayload = payload;
       notifyListeners();
     });
+  }
+
+  Future<void> _loadOpenFreeMapStyle() async {
+    _isLoadingStyle = true;
+    notifyListeners();
+    try {
+      final style = await StyleReader(
+        uri: _currentMapLayer.styleUrl,
+        httpHeaders: {'User-Agent': 'ESP32NavApp/2.0'},
+      ).read();
+      _mapStyle = style;
+    } catch (e) {
+      debugPrint('OpenFreeMap style load error: $e');
+    } finally {
+      _isLoadingStyle = false;
+      notifyListeners();
+    }
   }
 
   void setUiMode(AppUiMode mode) {
@@ -163,6 +188,7 @@ class NavigationProvider extends ChangeNotifier {
   void setMapLayer(MapLayerType layer) {
     _currentMapLayer = layer;
     notifyListeners();
+    _loadOpenFreeMapStyle();
   }
 
   void searchDestination(String query) {

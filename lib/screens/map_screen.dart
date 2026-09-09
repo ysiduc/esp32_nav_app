@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:vector_map_tiles/vector_map_tiles.dart';
 import '../models/search_place.dart';
 import '../models/map_layer_type.dart';
 import '../providers/navigation_provider.dart';
@@ -247,7 +248,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Loại Bản Đồ (Map Layers)',
+                  'Giao Diện OpenFreeMap',
                   style: TextStyle(color: Color(0xFF202124), fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
@@ -289,13 +290,13 @@ class _MapScreenState extends State<MapScreen> {
     final currentRoute = nav.currentRoute;
     final step = nav.currentStep;
 
-    // Bản đồ 3D góc nhìn lái xe (Perspective Pitch)
+    // Bản đồ OpenFreeMap
     Widget mapWidget = FlutterMap(
       mapController: _mapController,
       options: MapOptions(
         initialCenter: userPos,
         initialZoom: nav.uiMode == AppUiMode.activeNavigation ? 16.8 : 14.5,
-        maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
+        maxZoom: 20.0,
         minZoom: 3.0,
         keepAlive: true,
         backgroundColor: const Color(0xFFECE7E1),
@@ -306,18 +307,24 @@ class _MapScreenState extends State<MapScreen> {
         },
       ),
       children: [
-        // 1. TILE LAYER (CARTO VOYAGER 3D BUILDINGS & OSM TILES)
-        TileLayer(
-          urlTemplate: nav.currentMapLayer.urlTemplate,
-          subdomains: nav.currentMapLayer.subdomains,
-          userAgentPackageName: 'com.esp32nav.app',
-          keepBuffer: 12,
-          panBuffer: 4,
-          maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
-          tileProvider: NetworkTileProvider(),
-        ),
+        // 1. OPENFREEMAP VECTOR LAYER
+        if (nav.mapStyle != null)
+          VectorTileLayer(
+            theme: nav.mapStyle!.theme,
+            tileProviders: nav.mapStyle!.providers,
+            sprites: nav.mapStyle!.sprites,
+            layerMode: VectorTileLayerMode.vector,
+          )
+        else
+          TileLayer(
+            urlTemplate: 'https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.esp32nav.app',
+            keepBuffer: 6,
+            panBuffer: 2,
+            tileProvider: NetworkTileProvider(),
+          ),
 
-        // 2. TUYẾN ĐƯỜNG MÀU XANH ĐẬM CHUẨN GOOGLE MAPS (ẢNH CHỤP)
+        // 2. TUYẾN ĐƯỜNG MÀU XANH ĐẬM CHUẨN GOOGLE MAPS
         if (routes.isNotEmpty) ...[
           // Tuyến phụ (Màu Xám)
           for (int i = 0; i < routes.length; i++)
@@ -342,7 +349,7 @@ class _MapScreenState extends State<MapScreen> {
                   strokeWidth: 14.0,
                   color: const Color(0xFF003D99).withAlpha(120),
                 ),
-                // Lõi xanh dương đậm chuẩn ảnh chụp (#0E56CF)
+                // Lõi xanh dương đậm (#0E56CF)
                 Polyline(
                   points: currentRoute.polyline,
                   strokeWidth: 10.0,
@@ -355,7 +362,7 @@ class _MapScreenState extends State<MapScreen> {
         // 3. CÁC MARKER (VỊ TRÍ XE 3D, MŨI TÊN RẼ TRÊN ĐƯỜNG, ĐIỂM ĐÍCH)
         MarkerLayer(
           markers: [
-            // 3.1 MŨI TÊN CHỈ HƯỚNG RẼ ZIGZAG TRÊN TUYẾN ĐƯỜNG (CHÍNH XÁC NHƯ ẢNH MẪU)
+            // 3.1 MŨI TÊN CHỈ HƯỚNG RẼ ZIGZAG TRÊN TUYẾN ĐƯỜNG
             if (currentRoute != null && currentRoute.polyline.length > 5)
               Marker(
                 point: currentRoute.polyline[currentRoute.polyline.length ~/ 2],
@@ -408,7 +415,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
 
-            // 3.4 PUCK VỊ TRÍ XE 3D (ĐĨA TRẮNG VIỀN XÁM + MŨI TÊN ĐEN ▲ CHUẨN ẢNH CHỤP)
+            // 3.4 PUCK VỊ TRÍ XE 3D (ĐĨA TRẮNG VIỀN XÁM + MŨI TÊN ĐEN ▲)
             if (nav.uiMode == AppUiMode.activeNavigation)
               Marker(
                 point: userPos,
@@ -417,7 +424,6 @@ class _MapScreenState extends State<MapScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Vòng tròn mờ bên ngoài
                     Container(
                       width: 58,
                       height: 58,
@@ -426,7 +432,6 @@ class _MapScreenState extends State<MapScreen> {
                         color: const Color(0xFF80868B).withAlpha(120),
                       ),
                     ),
-                    // Đĩa tròn trắng có bóng đổ
                     Container(
                       width: 44,
                       height: 44,
@@ -464,11 +469,33 @@ class _MapScreenState extends State<MapScreen> {
       backgroundColor: const Color(0xFFECE7E1),
       body: Stack(
         children: [
-          // 1. MÀN HÌNH BẢN ĐỒ
+          // 1. MÀN HÌNH BẢN ĐỒ OPENFREEMAP
           Positioned.fill(child: mapWidget),
 
+          // Loading indicator khi tải style OpenFreeMap
+          if (nav.isLoadingStyle)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                    SizedBox(width: 8),
+                    Text('Đang tải OpenFreeMap...', style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+
           // ==========================================
-          // 2. CÁC NÚT ĐIỀU KHIỂN NỔI BÊN PHẢI (GÓC PHẢI TRÊN CHUẨN ẢNH)
+          // 2. CÁC NÚT ĐIỀU KHIỂN NỔI BÊN PHẢI (GÓC PHẢI TRÊN)
           // ==========================================
           Positioned(
             top: MediaQuery.of(context).padding.top + 16,
@@ -498,7 +525,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Nút Tắt / Bật Âm Thanh Loa (Icon 🔇 trong ảnh)
+                // Nút Tắt / Bật Âm Thanh Loa
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -524,7 +551,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Nút Chọn Lớp Bản Đồ
+                // Nút Chọn Style OpenFreeMap
                 GestureDetector(
                   onTap: () => _openLayerSelectorModal(context),
                   child: Container(
@@ -567,7 +594,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // ==========================================
-          // 3. GIAO DIỆN CHẾ ĐỘ DẪN ĐƯỜNG TRỰC TIẾP (ẢNH CHỤP)
+          // 3. GIAO DIỆN CHẾ ĐỘ DẪN ĐƯỜNG TRỰC TIẾP
           // ==========================================
           if (nav.uiMode == AppUiMode.activeNavigation) ...[
             // Banner Xanh Lá Chỉ Hướng
@@ -615,7 +642,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Nút Tìm Kiếm / Tổng Quan góc dưới phải (Icon tròn xanh như ảnh chụp)
+            // Nút Tìm Kiếm / Tổng Quan góc dưới phải
             Positioned(
               bottom: 95,
               right: 16,
@@ -1036,8 +1063,8 @@ class _MapScreenState extends State<MapScreen> {
                 const SizedBox(height: 16),
                 ListTile(
                   leading: const Icon(Icons.layers_rounded, color: Color(0xFF1A73E8)),
-                  title: const Text('Chọn Lớp Bản Đồ', style: TextStyle(color: Color(0xFF202124), fontWeight: FontWeight.bold)),
-                  subtitle: const Text('Bản đồ 3D Voyager, OSM, Vệ tinh, Địa hình...', style: TextStyle(color: Color(0xFF70757A), fontSize: 12)),
+                  title: const Text('Giao Diện OpenFreeMap', style: TextStyle(color: Color(0xFF202124), fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Liberty, Bright, Positron, Dark, Fiord...', style: TextStyle(color: Color(0xFF70757A), fontSize: 12)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _openLayerSelectorModal(context);

@@ -1,96 +1,58 @@
 enum MapLayerType {
-  voyager,
-  osmStandard,
-  osmHot,
-  esriSatellite,
-  darkOSM,
-  openTopo,
+  openFreeMapLiberty,
+  openFreeMapBright,
+  openFreeMapPositron,
+  openFreeMapDark,
+  openFreeMapFiord,
 }
 
 extension MapLayerExtension on MapLayerType {
   String get displayName {
     switch (this) {
-      case MapLayerType.voyager:
-        return 'Bản Đồ 3D Tòa Nhà (Voyager OSM - Chuẩn Ảnh)';
-      case MapLayerType.osmStandard:
-        return 'OpenStreetMap (Tiêu chuẩn chính thức)';
-      case MapLayerType.osmHot:
-        return 'OpenStreetMap Nhân đạo (Màu sắc tươi sáng)';
-      case MapLayerType.esriSatellite:
-        return 'Ảnh Vệ Tinh (Esri World Imagery)';
-      case MapLayerType.darkOSM:
-        return 'Chế độ Ban đêm (Dark Mode)';
-      case MapLayerType.openTopo:
-        return 'Bản đồ Địa hình Đồi núi (OpenTopo)';
+      case MapLayerType.openFreeMapLiberty:
+        return 'OpenFreeMap Liberty (Sống động & Tòa nhà 3D)';
+      case MapLayerType.openFreeMapBright:
+        return 'OpenFreeMap Bright (Ban ngày tươi sáng)';
+      case MapLayerType.openFreeMapPositron:
+        return 'OpenFreeMap Positron (Tối giản thanh lịch)';
+      case MapLayerType.openFreeMapDark:
+        return 'OpenFreeMap Dark (Chế độ ban đêm)';
+      case MapLayerType.openFreeMapFiord:
+        return 'OpenFreeMap Fiord (Tông màu lạnh)';
     }
   }
 
   String get iconEmoji {
     switch (this) {
-      case MapLayerType.voyager:
+      case MapLayerType.openFreeMapLiberty:
         return '🏙️';
-      case MapLayerType.osmStandard:
-        return '🗺️';
-      case MapLayerType.osmHot:
-        return '🎨';
-      case MapLayerType.esriSatellite:
-        return '🛰️';
-      case MapLayerType.darkOSM:
+      case MapLayerType.openFreeMapBright:
+        return '☀️';
+      case MapLayerType.openFreeMapPositron:
+        return '⚪';
+      case MapLayerType.openFreeMapDark:
         return '🌙';
-      case MapLayerType.openTopo:
-        return '🏔️';
+      case MapLayerType.openFreeMapFiord:
+        return '🌊';
     }
   }
 
-  String get urlTemplate {
+  String get styleUrl {
     switch (this) {
-      case MapLayerType.voyager:
-        return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-      case MapLayerType.osmStandard:
-        return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-      case MapLayerType.osmHot:
-        return 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
-      case MapLayerType.esriSatellite:
-        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-      case MapLayerType.darkOSM:
-        return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
-      case MapLayerType.openTopo:
-        return 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+      case MapLayerType.openFreeMapLiberty:
+        return 'https://tiles.openfreemap.org/styles/liberty';
+      case MapLayerType.openFreeMapBright:
+        return 'https://tiles.openfreemap.org/styles/bright';
+      case MapLayerType.openFreeMapPositron:
+        return 'https://tiles.openfreemap.org/styles/positron';
+      case MapLayerType.openFreeMapDark:
+        return 'https://tiles.openfreemap.org/styles/dark';
+      case MapLayerType.openFreeMapFiord:
+        return 'https://tiles.openfreemap.org/styles/fiord';
     }
   }
 
-  List<String> get subdomains {
-    switch (this) {
-      case MapLayerType.voyager:
-        return const ['a', 'b', 'c', 'd'];
-      case MapLayerType.osmStandard:
-        return const [];
-      case MapLayerType.osmHot:
-        return const ['a', 'b', 'c'];
-      case MapLayerType.esriSatellite:
-        return const [];
-      case MapLayerType.darkOSM:
-        return const ['a', 'b', 'c', 'd'];
-      case MapLayerType.openTopo:
-        return const ['a', 'b', 'c'];
-    }
-  }
+  String get pbfUrlTemplate => 'https://tiles.openfreemap.org/planet/{z}/{x}/{y}.pbf';
 
-  int get maxZoom {
-    switch (this) {
-      case MapLayerType.voyager:
-        return 20;
-      case MapLayerType.osmStandard:
-      case MapLayerType.osmHot:
-        return 19;
-      case MapLayerType.esriSatellite:
-        return 18;
-      case MapLayerType.darkOSM:
-        return 20;
-      case MapLayerType.openTopo:
-        return 17;
-    }
-  }
-
-  bool get isDarkMode => this == MapLayerType.darkOSM;
+  bool get isDarkMode => this == MapLayerType.openFreeMapDark;
 }
