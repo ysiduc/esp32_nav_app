@@ -57,8 +57,8 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastSentPayload;
   String? get lastSentPayload => _lastSentPayload;
 
-  // Lớp bản đồ hiện tại (mặc định Dark Matter)
-  MapLayerType _currentMapLayer = MapLayerType.cartoDark;
+  // Lớp bản đồ hiện tại (mặc định Dark OSM - 0 Watermark)
+  MapLayerType _currentMapLayer = MapLayerType.darkOSM;
   MapLayerType get currentMapLayer => _currentMapLayer;
 
   // Quản lý tìm kiếm
@@ -89,7 +89,7 @@ class NavigationProvider extends ChangeNotifier {
     });
   }
 
-  /// Đổi Lớp Bản đồ (OSM Standard, Satellite, Dark, Topo...)
+  /// Đổi Lớp Bản đồ (Dark OSM, Standard, HOT, Esri Street, Satellite...)
   void setMapLayer(MapLayerType layer) {
     _currentMapLayer = layer;
     notifyListeners();
@@ -108,7 +108,7 @@ class NavigationProvider extends ChangeNotifier {
     _isSearching = true;
     notifyListeners();
 
-    _debounceTimer = Timer(const Duration(milliseconds: 400), () async {
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () async {
       final results = await _geocodingService.searchPlaces(query, userLocation: _userLocation);
       _searchResults = results;
       _isSearching = false;

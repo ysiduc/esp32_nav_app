@@ -1,37 +1,42 @@
 enum MapLayerType {
+  darkOSM,
   osmStandard,
+  osmHot,
+  esriStreet,
   esriSatellite,
-  cartoDark,
-  cartoVoyager,
   openTopo,
 }
 
 extension MapLayerExtension on MapLayerType {
   String get displayName {
     switch (this) {
+      case MapLayerType.darkOSM:
+        return 'Chế độ Tối (Dark OSM - Không Watermark)';
       case MapLayerType.osmStandard:
-        return 'OSM Standard (Mặc định)';
+        return 'OSM Standard (Tiêu chuẩn OpenStreetMap)';
+      case MapLayerType.osmHot:
+        return 'OSM Humanitarian (Màu sắc rõ nét)';
+      case MapLayerType.esriStreet:
+        return 'Esri Street (Đường phố chi tiết cao)';
       case MapLayerType.esriSatellite:
-        return 'Esri Satellite (Ảnh vệ tinh)';
-      case MapLayerType.cartoDark:
-        return 'Dark Matter (Ban đêm)';
-      case MapLayerType.cartoVoyager:
-        return 'Voyager (Đường phố rõ nét)';
+        return 'Esri Satellite (Ảnh vệ tinh thực tế)';
       case MapLayerType.openTopo:
-        return 'OpenTopo (Bản đồ địa hình)';
+        return 'OpenTopo (Bản đồ địa hình đồi núi)';
     }
   }
 
   String get iconEmoji {
     switch (this) {
+      case MapLayerType.darkOSM:
+        return '🌙';
       case MapLayerType.osmStandard:
         return '🗺️';
+      case MapLayerType.osmHot:
+        return '🎨';
+      case MapLayerType.esriStreet:
+        return '🛣️';
       case MapLayerType.esriSatellite:
         return '🛰️';
-      case MapLayerType.cartoDark:
-        return '🌙';
-      case MapLayerType.cartoVoyager:
-        return '🏙️';
       case MapLayerType.openTopo:
         return '🏔️';
     }
@@ -39,28 +44,30 @@ extension MapLayerExtension on MapLayerType {
 
   String get urlTemplate {
     switch (this) {
+      case MapLayerType.darkOSM:
       case MapLayerType.osmStandard:
         return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+      case MapLayerType.osmHot:
+        return 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
+      case MapLayerType.esriStreet:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
       case MapLayerType.esriSatellite:
         return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-      case MapLayerType.cartoDark:
-        return 'https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png';
-      case MapLayerType.cartoVoyager:
-        return 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
       case MapLayerType.openTopo:
-        return 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png';
+        return 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
     }
   }
 
   List<String> get subdomains {
     switch (this) {
+      case MapLayerType.darkOSM:
       case MapLayerType.osmStandard:
+        return const [];
+      case MapLayerType.osmHot:
         return const ['a', 'b', 'c'];
+      case MapLayerType.esriStreet:
       case MapLayerType.esriSatellite:
         return const [];
-      case MapLayerType.cartoDark:
-      case MapLayerType.cartoVoyager:
-        return const ['a', 'b', 'c', 'd'];
       case MapLayerType.openTopo:
         return const ['a', 'b', 'c'];
     }
@@ -68,15 +75,18 @@ extension MapLayerExtension on MapLayerType {
 
   int get maxZoom {
     switch (this) {
+      case MapLayerType.darkOSM:
       case MapLayerType.osmStandard:
+      case MapLayerType.osmHot:
+        return 19;
+      case MapLayerType.esriStreet:
         return 19;
       case MapLayerType.esriSatellite:
         return 18;
-      case MapLayerType.cartoDark:
-      case MapLayerType.cartoVoyager:
-        return 20;
       case MapLayerType.openTopo:
         return 17;
     }
   }
+
+  bool get isDarkMode => this == MapLayerType.darkOSM;
 }
