@@ -12,9 +12,16 @@ import '../services/osrm_service.dart';
 import '../services/geocoding_service.dart';
 
 enum AppUiMode {
-  previewMap,      // Màn hình chọn & xem trước lộ trình (Ảnh 1)
-  previewList,     // Tab danh sách các tuyến đường so sánh (Ảnh 3)
-  activeNavigation // Dẫn đường thời gian thực (Ảnh 2)
+  explore,         // Chế độ xem bản đồ & tìm kiếm Google Maps
+  previewMap,      // Chế độ xem trước lộ trình (Directions)
+  previewList,     // Danh sách chi tiết các chặng đường (Steps)
+  activeNavigation // Dẫn đường trực tiếp Turn-by-Turn
+}
+
+enum TransportMode {
+  driving,    // Ô tô
+  motorcycle, // Xe máy
+  walking,    // Đi bộ
 }
 
 class NavigationProvider extends ChangeNotifier {
@@ -34,7 +41,7 @@ class NavigationProvider extends ChangeNotifier {
   final String _startAddressName = 'Vị trí của bạn';
   String get startAddressName => _startAddressName;
 
-  String _destinationName = 'Phương Hạnh';
+  String _destinationName = 'Hồ Hoàn Kiếm, Hà Nội';
   String get destinationName => _destinationName;
 
   List<RouteData> _routes = [];
@@ -47,8 +54,11 @@ class NavigationProvider extends ChangeNotifier {
       ? _routes[_selectedRouteIndex]
       : null;
 
-  AppUiMode _uiMode = AppUiMode.previewMap;
+  AppUiMode _uiMode = AppUiMode.explore;
   AppUiMode get uiMode => _uiMode;
+
+  TransportMode _transportMode = TransportMode.driving;
+  TransportMode get transportMode => _transportMode;
 
   int _currentStepIndex = 0;
   int get currentStepIndex => _currentStepIndex;
@@ -76,7 +86,7 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastSentPayload;
   String? get lastSentPayload => _lastSentPayload;
 
-  MapLayerType _currentMapLayer = MapLayerType.darkOSM;
+  MapLayerType _currentMapLayer = MapLayerType.osmStandard;
   MapLayerType get currentMapLayer => _currentMapLayer;
 
   List<SearchPlace> _searchResults = [];
@@ -98,12 +108,9 @@ class NavigationProvider extends ChangeNotifier {
     if (loc != null) {
       _userLocation = loc;
     } else {
-      _userLocation = const LatLng(20.9789, 105.8368); // Nguyễn Cảnh Dị mặc định
+      _userLocation = const LatLng(21.0285, 105.8542); // Hà Nội mặc định
     }
-    _destination = const LatLng(20.9125, 105.6548); // Điểm đến Phương Hạnh
     notifyListeners();
-
-    await calculateRoute();
 
     _bleService.lastPayloadStream.listen((payload) {
       _lastSentPayload = payload;
@@ -114,6 +121,14 @@ class NavigationProvider extends ChangeNotifier {
   void setUiMode(AppUiMode mode) {
     _uiMode = mode;
     notifyListeners();
+  }
+
+  void setTransportMode(TransportMode mode) {
+    _transportMode = mode;
+    notifyListeners();
+    if (_destination != null) {
+      calculateRoute();
+    }
   }
 
   void selectRoute(int index) {
@@ -180,8 +195,8 @@ class NavigationProvider extends ChangeNotifier {
   Future<void> calculateRoute() async {
     if (_userLocation == null && _destination == null) return;
 
-    final start = _userLocation ?? const LatLng(20.9789, 105.8368);
-    final end = _destination ?? const LatLng(20.9125, 105.6548);
+    final start = _userLocation ?? const LatLng(21.0285, 105.8542);
+    final end = _destination ?? const LatLng(20.9789, 105.8368);
 
     _isLoadingRoute = true;
     notifyListeners();
@@ -226,7 +241,7 @@ class NavigationProvider extends ChangeNotifier {
 
   void stopNavigation() {
     _isNavigating = false;
-    _uiMode = AppUiMode.previewMap;
+    _uiMode = AppUiMode.explore;
     _positionSubscription?.cancel();
     _bleSyncTimer?.cancel();
     notifyListeners();
