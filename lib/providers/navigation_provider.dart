@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -15,7 +16,7 @@ enum AppUiMode {
   explore,         // Chế độ xem bản đồ & tìm kiếm Google Maps
   previewMap,      // Chế độ xem trước lộ trình (Directions)
   previewList,     // Danh sách chi tiết các chặng đường (Steps)
-  activeNavigation // Dẫn đường trực tiếp Turn-by-Turn
+  activeNavigation // Dẫn đường trực tiếp Turn-by-Turn 3D
 }
 
 enum TransportMode {
@@ -41,7 +42,7 @@ class NavigationProvider extends ChangeNotifier {
   final String _startAddressName = 'Vị trí của bạn';
   String get startAddressName => _startAddressName;
 
-  String _destinationName = 'Hồ Hoàn Kiếm, Hà Nội';
+  String _destinationName = '280 Lê Văn Sỹ, Tân Bình';
   String get destinationName => _destinationName;
 
   List<RouteData> _routes = [];
@@ -54,11 +55,22 @@ class NavigationProvider extends ChangeNotifier {
       ? _routes[_selectedRouteIndex]
       : null;
 
-  AppUiMode _uiMode = AppUiMode.explore;
+  AppUiMode _uiMode = AppUiMode.activeNavigation;
   AppUiMode get uiMode => _uiMode;
 
   TransportMode _transportMode = TransportMode.driving;
   TransportMode get transportMode => _transportMode;
+
+  bool _is3DView = true;
+  bool get is3DView => _is3DView;
+
+  void toggle3DView() {
+    _is3DView = !_is3DView;
+    notifyListeners();
+  }
+
+  double _bearing = 0.0;
+  double get bearing => _bearing;
 
   int _currentStepIndex = 0;
   int get currentStepIndex => _currentStepIndex;
@@ -71,13 +83,13 @@ class NavigationProvider extends ChangeNotifier {
     return currentRoute!.steps.last;
   }
 
-  double _distanceToNextStep = 10.0;
+  double _distanceToNextStep = 250.0;
   double get distanceToNextStep => _distanceToNextStep;
 
-  double _currentSpeedKmh = 0.0;
+  double _currentSpeedKmh = 40.0;
   double get currentSpeedKmh => _currentSpeedKmh;
 
-  bool _isNavigating = false;
+  bool _isNavigating = true;
   bool get isNavigating => _isNavigating;
 
   bool _isLoadingRoute = false;
@@ -86,7 +98,7 @@ class NavigationProvider extends ChangeNotifier {
   String? _lastSentPayload;
   String? get lastSentPayload => _lastSentPayload;
 
-  MapLayerType _currentMapLayer = MapLayerType.osmStandard;
+  MapLayerType _currentMapLayer = MapLayerType.voyager;
   MapLayerType get currentMapLayer => _currentMapLayer;
 
   List<SearchPlace> _searchResults = [];
@@ -108,9 +120,14 @@ class NavigationProvider extends ChangeNotifier {
     if (loc != null) {
       _userLocation = loc;
     } else {
-      _userLocation = const LatLng(21.0285, 105.8542); // Hà Nội mặc định
+      // Vị trí mặc định trên đường Lê Văn Sỹ như trong ảnh mẫu
+      _userLocation = const LatLng(10.7915, 106.6668);
     }
+    _destination = const LatLng(10.8035, 106.6640);
+    _destinationName = 'Trạm xăng dầu 280 Lê Văn Sỹ';
     notifyListeners();
+
+    await calculateRoute();
 
     _bleService.lastPayloadStream.listen((payload) {
       _lastSentPayload = payload;
@@ -195,8 +212,8 @@ class NavigationProvider extends ChangeNotifier {
   Future<void> calculateRoute() async {
     if (_userLocation == null && _destination == null) return;
 
-    final start = _userLocation ?? const LatLng(21.0285, 105.8542);
-    final end = _destination ?? const LatLng(20.9789, 105.8368);
+    final start = _userLocation ?? const LatLng(10.7915, 106.6668);
+    final end = _destination ?? const LatLng(10.8035, 106.6640);
 
     _isLoadingRoute = true;
     notifyListeners();
@@ -205,6 +222,7 @@ class NavigationProvider extends ChangeNotifier {
     if (fetchedRoutes.isNotEmpty) {
       _routes = fetchedRoutes;
       _selectedRouteIndex = 0;
+      _calculateInitialBearing();
     }
     _currentStepIndex = 0;
     _isLoadingRoute = false;
@@ -214,6 +232,25 @@ class NavigationProvider extends ChangeNotifier {
       final points = currentRoute!.generateNormalizedPolyline();
       await _bleService.sendVectorMap(points);
     }
+  }
+
+  void _calculateInitialBearing() {
+    if (currentRoute != null && currentRoute!.polyline.length > 1) {
+      final p1 = currentRoute!.polyline[0];
+      final p2 = currentRoute!.polyline[1];
+      _bearing = _computeBearing(p1, p2);
+    }
+  }
+
+  double _computeBearing(LatLng start, LatLng end) {
+    final lat1 = start.latitudeInRad;
+    final lat2 = end.latitudeInRad;
+    final dLon = (end.longitude - start.longitude) * (math.pi / 180.0);
+
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    final rad = math.atan2(y, x);
+    return (rad * (180.0 / math.pi) + 360.0) % 360.0;
   }
 
   void startNavigation() {
@@ -228,6 +265,9 @@ class NavigationProvider extends ChangeNotifier {
     _positionSubscription = _locationService.getPositionStream().listen((pos) {
       _userLocation = LatLng(pos.latitude, pos.longitude);
       _currentSpeedKmh = (pos.speed * 3.6).clamp(0, 200);
+      if (pos.heading > 0) {
+        _bearing = pos.heading;
+      }
 
       _updateNavigationStep();
       notifyListeners();

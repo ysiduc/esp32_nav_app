@@ -131,8 +131,8 @@ class _MapScreenState extends State<MapScreen> {
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             leading: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE8F0FE),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE8F0FE),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(place.icon, color: const Color(0xFF1A73E8), size: 20),
@@ -150,7 +150,7 @@ class _MapScreenState extends State<MapScreen> {
                             onTap: () async {
                               await nav.selectSearchPlace(place);
                               if (context.mounted) Navigator.pop(ctx);
-                              _mapController.move(place.location, 14.5);
+                              _mapController.move(place.location, 15.5);
                             },
                           );
                         },
@@ -184,11 +184,11 @@ class _MapScreenState extends State<MapScreen> {
                                   child: Text('GỢI Ý ĐỊA ĐIỂM TIÊU BIỂU (VIỆT NAM)',
                                       style: TextStyle(color: Color(0xFF70757A), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                                 ),
+                                _buildPlaceTile('280 Lê Văn Sỹ', 'Phường 14, Quận 3, TP.HCM', const LatLng(10.7915, 106.6668), ctx, nav),
+                                _buildPlaceTile('Nhà thờ Tân Xa Châu', '367 Lê Văn Sỹ, Phường 2, Tân Bình, TP.HCM', const LatLng(10.7938, 106.6660), ctx, nav),
+                                _buildPlaceTile('Ngã tư Phạm Văn Hai', 'Lê Văn Sỹ x Phạm Văn Hai, Tân Bình, TP.HCM', const LatLng(10.7955, 106.6655), ctx, nav),
                                 _buildPlaceTile('Hồ Hoàn Kiếm', 'Quận Hoàn Kiếm, Hà Nội', const LatLng(21.0285, 105.8542), ctx, nav),
-                                _buildPlaceTile('Chung cư CT36A Định Công', 'Phố Định Công Thượng, Hoàng Mai, Hà Nội', const LatLng(20.9789, 105.8368), ctx, nav),
-                                _buildPlaceTile('Sân bay Nội Bài', 'Sóc Sơn, Hà Nội', const LatLng(21.2187, 105.8041), ctx, nav),
                                 _buildPlaceTile('Landmark 81', '720A Điện Biên Phủ, Phường 22, Bình Thạnh, TP.HCM', const LatLng(10.7950, 106.7219), ctx, nav),
-                                _buildPlaceTile('Chợ Bến Thành', 'Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM', const LatLng(10.7725, 106.6980), ctx, nav),
                               ],
                             ),
                     ),
@@ -214,7 +214,7 @@ class _MapScreenState extends State<MapScreen> {
       onTap: () async {
         await nav.selectSearchPlace(SearchPlace(name: name, description: desc, location: loc));
         if (context.mounted) Navigator.pop(ctx);
-        _mapController.move(loc, 14.0);
+        _mapController.move(loc, 15.5);
       },
     );
   }
@@ -284,193 +284,452 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final nav = context.watch<NavigationProvider>();
-    final userPos = nav.userLocation ?? const LatLng(21.0285, 105.8542);
+    final userPos = nav.userLocation ?? const LatLng(10.7915, 106.6668);
     final routes = nav.routes;
     final currentRoute = nav.currentRoute;
     final step = nav.currentStep;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      body: Stack(
-        children: [
-          // 1. LỚP BẢN ĐỒ OPENSTREETMAP CHÍNH THỨC (CHUẨN GOOGLE MAPS)
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: userPos,
-              initialZoom: nav.uiMode == AppUiMode.activeNavigation ? 16.5 : 13.5,
-              maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
-              minZoom: 3.0,
-              keepAlive: true,
-              backgroundColor: const Color(0xFFE5E3DF),
-              onTap: (tapPosition, point) {
-                if (nav.uiMode != AppUiMode.activeNavigation) {
-                  nav.setDestination(point);
-                }
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: nav.currentMapLayer.urlTemplate,
-                subdomains: nav.currentMapLayer.subdomains,
-                userAgentPackageName: 'com.esp32nav.app',
-                keepBuffer: 10,
-                panBuffer: 4,
-                maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
-                tileProvider: NetworkTileProvider(),
-              ),
+    // Bản đồ 3D góc nhìn lái xe (Perspective Pitch)
+    Widget mapWidget = FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: userPos,
+        initialZoom: nav.uiMode == AppUiMode.activeNavigation ? 16.8 : 14.5,
+        maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
+        minZoom: 3.0,
+        keepAlive: true,
+        backgroundColor: const Color(0xFFECE7E1),
+        onTap: (tapPosition, point) {
+          if (nav.uiMode != AppUiMode.activeNavigation) {
+            nav.setDestination(point);
+          }
+        },
+      ),
+      children: [
+        // 1. TILE LAYER (CARTO VOYAGER 3D BUILDINGS & OSM TILES)
+        TileLayer(
+          urlTemplate: nav.currentMapLayer.urlTemplate,
+          subdomains: nav.currentMapLayer.subdomains,
+          userAgentPackageName: 'com.esp32nav.app',
+          keepBuffer: 12,
+          panBuffer: 4,
+          maxZoom: nav.currentMapLayer.maxZoom.toDouble(),
+          tileProvider: NetworkTileProvider(),
+        ),
 
-              // VẼ TUYẾN ĐƯỜNG GOOGLE MAPS (XANH DƯƠNG #1A73E8 & XÁM PHỤ #70757A)
-              if (routes.isNotEmpty) ...[
-                // Tuyến phụ (Màu Xám Google)
-                for (int i = 0; i < routes.length; i++)
-                  if (i != nav.selectedRouteIndex)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: routes[i].polyline,
-                          strokeWidth: 6.0,
-                          color: const Color(0xFF9AA0A6).withAlpha(220),
-                        ),
-                      ],
-                    ),
-
-                // Tuyến chính (Màu Xanh Google Maps Nổi Bật)
-                if (currentRoute != null)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: currentRoute.polyline,
-                        strokeWidth: 9.0,
-                        color: const Color(0xFF185ABC).withAlpha(120),
-                      ),
-                      Polyline(
-                        points: currentRoute.polyline,
-                        strokeWidth: 6.0,
-                        color: const Color(0xFF1A73E8),
-                      ),
-                    ],
+        // 2. TUYẾN ĐƯỜNG MÀU XANH ĐẬM CHUẨN GOOGLE MAPS (ẢNH CHỤP)
+        if (routes.isNotEmpty) ...[
+          // Tuyến phụ (Màu Xám)
+          for (int i = 0; i < routes.length; i++)
+            if (i != nav.selectedRouteIndex)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: routes[i].polyline,
+                    strokeWidth: 8.0,
+                    color: const Color(0xFF9AA0A6).withAlpha(200),
                   ),
-              ],
-
-              // MARKERS GOOGLE MAPS
-              MarkerLayer(
-                markers: [
-                  // 1. Điểm xuất phát (Chấm tròn xanh Google Maps)
-                  Marker(
-                    point: userPos,
-                    width: 22,
-                    height: 22,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A73E8),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 6),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // 2. Điểm đích (Ghim Đỏ Google Maps 📍)
-                  if (nav.destination != null)
-                    Marker(
-                      point: nav.destination!,
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.topCenter,
-                      child: const Icon(
-                        Icons.location_on_rounded,
-                        color: Color(0xFFEA4335),
-                        size: 40,
-                        shadows: [
-                          Shadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3)),
-                        ],
-                      ),
-                    ),
-
-                  // 3. Mũi tên dẫn đường Google Navigation Puck (Khi dẫn đường)
-                  if (nav.uiMode == AppUiMode.activeNavigation)
-                    Marker(
-                      point: userPos,
-                      width: 48,
-                      height: 48,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFF1A73E8),
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(color: const Color(0xFF1A73E8).withAlpha(150), blurRadius: 14, spreadRadius: 2),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.navigation_rounded, color: Colors.white, size: 28),
-                        ),
-                      ),
-                    ),
-
-                  // 4. Huy hiệu thời gian trên lộ trình (Google Time Badges)
-                  if (nav.uiMode != AppUiMode.activeNavigation && routes.isNotEmpty) ...[
-                    if (currentRoute != null && currentRoute.polyline.length > 15)
-                      Marker(
-                        point: currentRoute.polyline[currentRoute.polyline.length ~/ 3],
-                        width: 110,
-                        height: 36,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF188038),
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black26, blurRadius: 6),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${currentRoute.shortDurationFormatted} • Nhanh nhất',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    for (int i = 0; i < routes.length; i++)
-                      if (i != nav.selectedRouteIndex && routes[i].polyline.length > 15)
-                        Marker(
-                          point: routes[i].polyline[routes[i].polyline.length ~/ 2],
-                          width: 80,
-                          height: 32,
-                          child: GestureDetector(
-                            onTap: () => nav.selectRoute(i),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.grey.shade300),
-                                boxShadow: const [
-                                  BoxShadow(color: Colors.black12, blurRadius: 4),
-                                ],
-                              ),
-                              child: Center(
-                                child: Text(
-                                  routes[i].shortDurationFormatted,
-                                  style: const TextStyle(color: Color(0xFF5F6368), fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                  ],
                 ],
               ),
-            ],
+
+          // Tuyến chính (Màu Xanh Đậm Ribbon 3D)
+          if (currentRoute != null)
+            PolylineLayer(
+              polylines: [
+                // Viền ngoài tạo độ sâu
+                Polyline(
+                  points: currentRoute.polyline,
+                  strokeWidth: 14.0,
+                  color: const Color(0xFF003D99).withAlpha(120),
+                ),
+                // Lõi xanh dương đậm chuẩn ảnh chụp (#0E56CF)
+                Polyline(
+                  points: currentRoute.polyline,
+                  strokeWidth: 10.0,
+                  color: const Color(0xFF0E56CF),
+                ),
+              ],
+            ),
+        ],
+
+        // 3. CÁC MARKER (VỊ TRÍ XE 3D, MŨI TÊN RẼ TRÊN ĐƯỜNG, ĐIỂM ĐÍCH)
+        MarkerLayer(
+          markers: [
+            // 3.1 MŨI TÊN CHỈ HƯỚNG RẼ ZIGZAG TRÊN TUYẾN ĐƯỜNG (CHÍNH XÁC NHƯ ẢNH MẪU)
+            if (currentRoute != null && currentRoute.polyline.length > 5)
+              Marker(
+                point: currentRoute.polyline[currentRoute.polyline.length ~/ 2],
+                width: 38,
+                height: 38,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Icon(Icons.turn_slight_right_rounded, color: Color(0xFF0E56CF), size: 30),
+                ),
+              ),
+
+            // 3.2 ĐIỂM XUẤT PHÁT (KHI CHƯA BẬT DẪN ĐƯỜNG)
+            if (nav.uiMode != AppUiMode.activeNavigation)
+              Marker(
+                point: userPos,
+                width: 24,
+                height: 24,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0E56CF),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withAlpha(90), blurRadius: 6),
+                    ],
+                  ),
+                ),
+              ),
+
+            // 3.3 ĐIỂM ĐÍCH (GHIM ĐỎ 📍)
+            if (nav.destination != null)
+              Marker(
+                point: nav.destination!,
+                width: 44,
+                height: 44,
+                alignment: Alignment.topCenter,
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: Color(0xFFEA4335),
+                  size: 44,
+                  shadows: [
+                    Shadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3)),
+                  ],
+                ),
+              ),
+
+            // 3.4 PUCK VỊ TRÍ XE 3D (ĐĨA TRẮNG VIỀN XÁM + MŨI TÊN ĐEN ▲ CHUẨN ẢNH CHỤP)
+            if (nav.uiMode == AppUiMode.activeNavigation)
+              Marker(
+                point: userPos,
+                width: 64,
+                height: 64,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Vòng tròn mờ bên ngoài
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF80868B).withAlpha(120),
+                      ),
+                    ),
+                    // Đĩa tròn trắng có bóng đổ
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2)),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.navigation_rounded, color: Color(0xFF202124), size: 26),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+
+    // Áp dụng góc nghiêng 3D Perspective khi dẫn đường
+    if (nav.uiMode == AppUiMode.activeNavigation && nav.is3DView) {
+      mapWidget = Transform(
+        alignment: Alignment.bottomCenter,
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, 0.0016)
+          ..rotateX(0.65),
+        child: mapWidget,
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFECE7E1),
+      body: Stack(
+        children: [
+          // 1. MÀN HÌNH BẢN ĐỒ
+          Positioned.fill(child: mapWidget),
+
+          // ==========================================
+          // 2. CÁC NÚT ĐIỀU KHIỂN NỔI BÊN PHẢI (GÓC PHẢI TRÊN CHUẨN ẢNH)
+          // ==========================================
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            right: 16,
+            child: Column(
+              children: [
+                // Nút chuyển đổi 2D / 3D
+                GestureDetector(
+                  onTap: () => nav.toggle3DView(),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(240),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        nav.is3DView ? '3D' : '2D',
+                        style: const TextStyle(color: Color(0xFF202124), fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Nút Tắt / Bật Âm Thanh Loa (Icon 🔇 trong ảnh)
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isMuted = !_isMuted;
+                    });
+                  },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(240),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: Icon(
+                      _isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                      color: const Color(0xFF202124),
+                      size: 24,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Nút Chọn Lớp Bản Đồ
+                GestureDetector(
+                  onTap: () => _openLayerSelectorModal(context),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(240),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: const Icon(Icons.layers_outlined, color: Color(0xFF1A73E8), size: 24),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Nút Quản Lý ESP32
+                GestureDetector(
+                  onTap: () => _showToolsModal(context),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(240),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: Icon(
+                      nav.bleService.isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
+                      color: nav.bleService.isConnected ? const Color(0xFF188038) : const Color(0xFF5F6368),
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           // ==========================================
-          // 2. GIAO DIỆN CHẾ ĐỘ 1: TÌM KIẾM & KHÁM PHÁ (GOOGLE MAPS EXPLORE)
+          // 3. GIAO DIỆN CHẾ ĐỘ DẪN ĐƯỜNG TRỰC TIẾP (ẢNH CHỤP)
+          // ==========================================
+          if (nav.uiMode == AppUiMode.activeNavigation) ...[
+            // Banner Xanh Lá Chỉ Hướng
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 16,
+              right: 80,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D652D),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      step?.icon ?? Icons.turn_slight_right_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${nav.distanceToNextStep.toInt()} m',
+                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
+                          ),
+                          Text(
+                            step?.streetName.isNotEmpty == true ? step!.streetName : 'Đường Lê Văn Sỹ',
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Nút Tìm Kiếm / Tổng Quan góc dưới phải (Icon tròn xanh như ảnh chụp)
+            Positioned(
+              bottom: 95,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => _openSearchModal(context),
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1A73E8),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3)),
+                    ],
+                  ),
+                  child: const Icon(Icons.search_rounded, color: Colors.white, size: 28),
+                ),
+              ),
+            ),
+
+            // Nút Re-center định vị góc dưới trái
+            Positioned(
+              bottom: 95,
+              left: 16,
+              child: GestureDetector(
+                onTap: () {
+                  _mapController.move(userPos, 16.8);
+                },
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 3)),
+                    ],
+                  ),
+                  child: const Icon(Icons.navigation_rounded, color: Color(0xFF1A73E8), size: 28),
+                ),
+              ),
+            ),
+
+            // Thanh Bottom Trắng Google Maps Dẫn Đường
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -3)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // Nút Dừng dẫn đường (X)
+                    GestureDetector(
+                      onTap: () => nav.stopNavigation(),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close_rounded, color: Color(0xFF5F6368), size: 24),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+
+                    // ETA & Khoảng cách
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                currentRoute?.shortDurationFormatted ?? '12p',
+                                style: const TextStyle(color: Color(0xFF188038), fontSize: 20, fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                currentRoute?.formattedTotalDistance ?? '4,8 km',
+                                style: const TextStyle(color: Color(0xFF5F6368), fontSize: 14, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            'Đến lúc ${currentRoute?.arrivalTimeFormatted ?? '21:05'} • Tuyến nhanh nhất',
+                            style: const TextStyle(color: Color(0xFF70757A), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Nút Danh Sách Chặng
+                    IconButton(
+                      icon: const Icon(Icons.format_list_bulleted_rounded, color: Color(0xFF5F6368)),
+                      onPressed: () => nav.setUiMode(AppUiMode.previewList),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // ==========================================
+          // 4. GIAO DIỆN CHẾ ĐỘ TÌM KIẾM (EXPLORE)
           // ==========================================
           if (nav.uiMode == AppUiMode.explore) ...[
             SafeArea(
@@ -479,7 +738,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Thanh Tìm Kiếm Trắng Nổi Google Maps
+                    // Thanh Tìm Kiếm Nổi
                     GestureDetector(
                       onTap: () => _openSearchModal(context),
                       child: Container(
@@ -520,7 +779,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Băng Chuyền Chip Danh Mục Nhanh (Google Categories)
+                    // Băng Chuyền Danh Mục
                     SizedBox(
                       height: 38,
                       child: ListView.separated(
@@ -564,53 +823,10 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ),
-
-            // Nút FAB nổi bên phải (Lớp bản đồ, Định vị GPS, Bluetooth ESP32)
-            Positioned(
-              right: 16,
-              bottom: 40,
-              child: Column(
-                children: [
-                  // Nút Lớp Bản Đồ
-                  FloatingActionButton.small(
-                    heroTag: 'fab_layer',
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1A73E8),
-                    elevation: 3,
-                    onPressed: () => _openLayerSelectorModal(context),
-                    child: const Icon(Icons.layers_outlined),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Nút Công cụ & BLE ESP32
-                  FloatingActionButton.small(
-                    heroTag: 'fab_ble',
-                    backgroundColor: Colors.white,
-                    foregroundColor: nav.bleService.isConnected ? const Color(0xFF188038) : const Color(0xFF5F6368),
-                    elevation: 3,
-                    onPressed: () => _showToolsModal(context),
-                    child: Icon(nav.bleService.isConnected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Nút Vị trí của tôi (GPS)
-                  FloatingActionButton(
-                    heroTag: 'fab_gps',
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1A73E8),
-                    elevation: 4,
-                    onPressed: () {
-                      _mapController.move(userPos, 15.0);
-                    },
-                    child: const Icon(Icons.my_location_rounded, size: 26),
-                  ),
-                ],
-              ),
-            ),
           ],
 
           // ==========================================
-          // 3. GIAO DIỆN CHẾ ĐỘ 2: XEM TRƯỚC LỘ TRÌNH (GOOGLE DIRECTIONS)
+          // 5. GIAO DIỆN CHẾ ĐỘ XEM TRƯỚC LỘ TRÌNH (PREVIEW MAP)
           // ==========================================
           if (nav.uiMode == AppUiMode.previewMap) ...[
             SafeArea(
@@ -618,7 +834,6 @@ class _MapScreenState extends State<MapScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Column(
                   children: [
-                    // Hộp Điểm Đi - Đến Google Maps
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -672,35 +887,6 @@ class _MapScreenState extends State<MapScreen> {
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.swap_vert_rounded, color: Color(0xFF5F6368)),
-                                onPressed: () {},
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // Tabs Phương Tiện (Ô tô, Xe máy, Đi bộ)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildTransportTab(
-                                icon: Icons.directions_car_rounded,
-                                label: 'Ô tô',
-                                isSelected: nav.transportMode == TransportMode.driving,
-                                onTap: () => nav.setTransportMode(TransportMode.driving),
-                              ),
-                              _buildTransportTab(
-                                icon: Icons.two_wheeler_rounded,
-                                label: 'Xe máy',
-                                isSelected: nav.transportMode == TransportMode.motorcycle,
-                                onTap: () => nav.setTransportMode(TransportMode.motorcycle),
-                              ),
-                              _buildTransportTab(
-                                icon: Icons.directions_walk_rounded,
-                                label: 'Đi bộ',
-                                isSelected: nav.transportMode == TransportMode.walking,
-                                onTap: () => nav.setTransportMode(TransportMode.walking),
-                              ),
                             ],
                           ),
                         ],
@@ -711,7 +897,6 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
-            // Bottom Sheet Lộ trình Google Maps
             Positioned(
               bottom: 0,
               left: 0,
@@ -727,93 +912,48 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(
-                      child: GestureDetector(
-                        onTap: () => nav.setUiMode(AppUiMode.previewList),
-                        child: Container(
-                          width: 36,
-                          height: 4,
-                          decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
-                        ),
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              currentRoute?.shortDurationFormatted ?? '14p',
-                              style: const TextStyle(color: Color(0xFF188038), fontSize: 26, fontWeight: FontWeight.w900),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '(${currentRoute?.formattedTotalDistance ?? '7,2 km'})',
-                              style: const TextStyle(color: Color(0xFF5F6368), fontSize: 16, fontWeight: FontWeight.w600),
-                            ),
-                          ],
+                        Text(
+                          currentRoute?.shortDurationFormatted ?? '14p',
+                          style: const TextStyle(color: Color(0xFF188038), fontSize: 26, fontWeight: FontWeight.w900),
                         ),
                         Text(
-                          'Đến lúc ${currentRoute?.arrivalTimeFormatted ?? '20:45'}',
-                          style: const TextStyle(color: Color(0xFF5F6368), fontSize: 14, fontWeight: FontWeight.w500),
+                          '(${currentRoute?.formattedTotalDistance ?? '7,2 km'})',
+                          style: const TextStyle(color: Color(0xFF5F6368), fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      currentRoute?.viaRoadName ?? 'Tuyến đường nhanh nhất dù có chút công trình',
-                      style: const TextStyle(color: Color(0xFF202124), fontSize: 14, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A73E8),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                              elevation: 2,
-                            ),
-                            onPressed: () => nav.startNavigation(),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.navigation_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text('Bắt đầu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              ],
-                            ),
-                          ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1A73E8),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF1A73E8),
-                              side: const BorderSide(color: Color(0xFFDADCE0)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                            ),
-                            onPressed: () => nav.setUiMode(AppUiMode.previewList),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.list_alt_rounded, size: 18),
-                                SizedBox(width: 6),
-                                Text('Các chặng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              ],
-                            ),
-                          ),
+                        onPressed: () => nav.startNavigation(),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.navigation_rounded, size: 20),
+                            SizedBox(width: 8),
+                            Text('Bắt đầu dẫn đường 3D', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -822,7 +962,7 @@ class _MapScreenState extends State<MapScreen> {
           ],
 
           // ==========================================
-          // 4. GIAO DIỆN CHẾ ĐỘ 3: DANH SÁCH CÁC CHẶNG ĐƯỜNG (GOOGLE STEPS)
+          // 6. GIAO DIỆN DANH SÁCH CHẶNG (PREVIEW LIST)
           // ==========================================
           if (nav.uiMode == AppUiMode.previewList) ...[
             SafeArea(
@@ -843,28 +983,16 @@ class _MapScreenState extends State<MapScreen> {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF202124)),
-                            onPressed: () => nav.setUiMode(AppUiMode.previewMap),
+                            onPressed: () => nav.setUiMode(AppUiMode.activeNavigation),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Chi tiết lộ trình', style: TextStyle(color: Color(0xFF70757A), fontSize: 12)),
-                                Text(
-                                  '${currentRoute?.shortDurationFormatted ?? ''} (${currentRoute?.formattedTotalDistance ?? ''})',
-                                  style: const TextStyle(color: Color(0xFF202124), fontSize: 16, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
+                          const Text('Chi tiết các chặng rẽ', style: TextStyle(color: Color(0xFF202124), fontSize: 16, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
                     const Divider(height: 1),
                     Expanded(
                       child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
                         itemCount: currentRoute?.steps.length ?? 0,
                         separatorBuilder: (_, _) => const Divider(height: 1, indent: 64),
                         itemBuilder: (context, idx) {
@@ -875,233 +1003,11 @@ class _MapScreenState extends State<MapScreen> {
                               decoration: const BoxDecoration(color: Color(0xFFE8F0FE), shape: BoxShape.circle),
                               child: Icon(st.icon, color: const Color(0xFF1A73E8), size: 22),
                             ),
-                            title: Text(
-                              st.streetName.isNotEmpty ? st.streetName : st.instruction,
-                              style: const TextStyle(color: Color(0xFF202124), fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            subtitle: Text(
-                              'Đi tiếp ${st.distanceMeters.round()} m',
-                              style: const TextStyle(color: Color(0xFF5F6368), fontSize: 12),
-                            ),
+                            title: Text(st.streetName.isNotEmpty ? st.streetName : st.instruction, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: Text('Đi tiếp ${st.distanceMeters.round()} m', style: const TextStyle(color: Color(0xFF5F6368), fontSize: 12)),
                           );
                         },
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1A73E8),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          ),
-                          onPressed: () => nav.startNavigation(),
-                          child: const Text('Bắt đầu dẫn đường', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // ==========================================
-          // 5. GIAO DIỆN CHẾ ĐỘ 4: DẪN ĐƯỜNG TRỰC TIẾP (GOOGLE MAPS ACTIVE NAVIGATION)
-          // ==========================================
-          if (nav.uiMode == AppUiMode.activeNavigation) ...[
-            // BANNER XANH LÁ GOOGLE MAPS TRÊN CÙNG (#0D652D)
-            SafeArea(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0D652D),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4)),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      step?.icon ?? Icons.turn_sharp_left_rounded,
-                      color: Colors.white,
-                      size: 44,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${nav.distanceToNextStep.toInt()} m',
-                            style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900),
-                          ),
-                          Text(
-                            step?.streetName ?? 'Phố Trần Nguyên Hãn',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Nút Loa & Nút La Bàn góc trên bên phải
-            Positioned(
-              top: 110,
-              right: 16,
-              child: Column(
-                children: [
-                  FloatingActionButton.small(
-                    heroTag: 'fab_mute',
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF5F6368),
-                    elevation: 3,
-                    onPressed: () {
-                      setState(() {
-                        _isMuted = !_isMuted;
-                      });
-                    },
-                    child: Icon(_isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded),
-                  ),
-                  const SizedBox(height: 10),
-                  FloatingActionButton.small(
-                    heroTag: 'fab_nav_layer',
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1A73E8),
-                    elevation: 3,
-                    onPressed: () => _openLayerSelectorModal(context),
-                    child: const Icon(Icons.layers_outlined),
-                  ),
-                ],
-              ),
-            ),
-
-            // Đồng hồ Tốc độ & Giới hạn tốc độ tròn Google Maps
-            Positioned(
-              bottom: 95,
-              left: 16,
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 8),
-                  ],
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${nav.currentSpeedKmh.toInt()}',
-                      style: const TextStyle(color: Color(0xFF202124), fontSize: 20, fontWeight: FontWeight.w900, height: 1),
-                    ),
-                    const Text(
-                      'km/h',
-                      style: TextStyle(color: Color(0xFF5F6368), fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Nút Re-center (Định vị) góc dưới phải
-            Positioned(
-              bottom: 95,
-              right: 16,
-              child: FloatingActionButton(
-                heroTag: 'fab_recenter',
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF1A73E8),
-                elevation: 4,
-                onPressed: () {
-                  _mapController.move(userPos, 16.5);
-                },
-                child: const Icon(Icons.navigation_rounded, size: 26),
-              ),
-            ),
-
-            // THANH BOTTOM TRẮNG GOOGLE MAPS DẪN ĐƯỜNG
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -3)),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Nút Dừng dẫn đường (X màu xám)
-                    GestureDetector(
-                      onTap: () => nav.stopNavigation(),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.close_rounded, color: Color(0xFF5F6368), size: 26),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-
-                    // ETA & Khoảng cách còn lại
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                currentRoute?.shortDurationFormatted ?? '10p',
-                                style: const TextStyle(color: Color(0xFF188038), fontSize: 20, fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                currentRoute?.formattedTotalDistance ?? '7,2 km',
-                                style: const TextStyle(color: Color(0xFF5F6368), fontSize: 14, fontWeight: FontWeight.w600),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'Đến lúc ${currentRoute?.arrivalTimeFormatted ?? '20:45'}',
-                            style: const TextStyle(color: Color(0xFF70757A), fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Nút Tìm kiếm trên tuyến đường (🔍)
-                    IconButton(
-                      icon: const Icon(Icons.search_rounded, color: Color(0xFF5F6368)),
-                      onPressed: () => _openSearchModal(context),
-                    ),
-
-                    // Nút Công cụ & BLE (⋮)
-                    IconButton(
-                      icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF5F6368)),
-                      onPressed: () => _showToolsModal(context),
                     ),
                   ],
                 ),
@@ -1109,39 +1015,6 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildTransportTab({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE8F0FE) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: isSelected ? Border.all(color: const Color(0xFF1A73E8)) : null,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: isSelected ? const Color(0xFF1A73E8) : const Color(0xFF5F6368), size: 18),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? const Color(0xFF1A73E8) : const Color(0xFF5F6368),
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1164,7 +1037,7 @@ class _MapScreenState extends State<MapScreen> {
                 ListTile(
                   leading: const Icon(Icons.layers_rounded, color: Color(0xFF1A73E8)),
                   title: const Text('Chọn Lớp Bản Đồ', style: TextStyle(color: Color(0xFF202124), fontWeight: FontWeight.bold)),
-                  subtitle: const Text('OpenStreetMap, Vệ tinh, Địa hình, Ban đêm...', style: TextStyle(color: Color(0xFF70757A), fontSize: 12)),
+                  subtitle: const Text('Bản đồ 3D Voyager, OSM, Vệ tinh, Địa hình...', style: TextStyle(color: Color(0xFF70757A), fontSize: 12)),
                   onTap: () {
                     Navigator.pop(ctx);
                     _openLayerSelectorModal(context);
